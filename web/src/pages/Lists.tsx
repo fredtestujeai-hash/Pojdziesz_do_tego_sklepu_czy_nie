@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, LogOut, Plus, ShoppingBasket, Sparkles } from "lucide-react";
+import { ChevronRight, LogOut, Plus, ShoppingBasket, Sparkles, Trash2 } from "lucide-react";
 import { supabase, zl, type ShoppingList } from "../lib/supabase";
 import { Empty, PageHeader } from "../components/ui";
 
@@ -10,6 +10,14 @@ export default function Lists() {
   const [lists, setLists] = useState<Row[] | null>(null);
   const [name, setName] = useState("");
   const nav = useNavigate();
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  async function remove(id: string) {
+    setConfirmId(null);
+    setLists((ls) => (ls ? ls.filter((l) => l.id !== id) : ls));
+    const { error } = await supabase.from("shopping_lists").delete().eq("id", id);
+    if (error) load();
+  }
 
   async function load() {
     const { data } = await supabase.from("shopping_lists").select("*, list_items(count)").order("created_at", { ascending: false }).limit(50);
@@ -47,7 +55,8 @@ export default function Lists() {
           const [label, cls] = status[l.status];
           const savings = l.summary ? Object.values(l.summary.per_store).reduce((a, s) => a + s.savings, 0) : 0;
           return (
-            <Link key={l.id} to={`/lista/${l.id}`} className="card p-4 flex items-center gap-4 active:scale-[.99] transition">
+            <div key={l.id} className="card p-4 flex items-center gap-3">
+            <Link to={`/lista/${l.id}`} className="flex-1 min-w-0 flex items-center gap-4 active:scale-[.99] transition">
               <div className="size-12 rounded-2xl grid place-items-center bg-gradient-to-br from-brand/15 to-brand-2/15 text-brand"><ShoppingBasket size={22} /></div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold truncate">{l.name}</p>
@@ -59,6 +68,15 @@ export default function Lists() {
               </div>
               <ChevronRight className="muted" size={18} />
             </Link>
+              {confirmId === l.id ? (
+                <div className="flex gap-1 shrink-0">
+                  <button className="btn bg-red-600 text-white !px-3 !py-2 text-sm" onClick={() => remove(l.id)}>Usuń</button>
+                  <button className="btn-ghost !px-3 !py-2 text-sm" onClick={() => setConfirmId(null)}>Nie</button>
+                </div>
+              ) : (
+                <button className="muted p-2 shrink-0" onClick={() => setConfirmId(l.id)} aria-label={`Usuń listę ${l.name}`} title="Usuń listę"><Trash2 size={16} /></button>
+              )}
+            </div>
           );
         })}
       </div>

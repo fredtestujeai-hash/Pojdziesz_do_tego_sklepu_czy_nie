@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Minus, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Check, Minus, Pencil, Plus, Sparkles, Trash2, Wand2, X } from "lucide-react";
 import { STORE_META, STORES, supabase, zl, type ListItem, type ShoppingList, type Store } from "../lib/supabase";
 import { runAi } from "../lib/api";
 import { ErrorBox, Progress, StoreBadge } from "../components/ui";
@@ -15,6 +15,25 @@ export default function ListDetail() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const [view, setView] = useState<"edit" | "shop">("edit");
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [confirmDel, setConfirmDel] = useState(false);
+  const nav = useNavigate();
+
+  async function saveName(e: React.FormEvent) {
+    e.preventDefault();
+    const n = newName.trim();
+    if (!n) return;
+    setRenaming(false);
+    setList((l) => (l ? { ...l, name: n } : l));
+    const { error } = await supabase.from("shopping_lists").update({ name: n }).eq("id", id);
+    if (error) setErr("Nie udało się zmienić nazwy: " + error.message);
+  }
+  async function deleteList() {
+    const { error } = await supabase.from("shopping_lists").delete().eq("id", id);
+    if (error) { setErr("Nie udało się usunąć listy: " + error.message); setConfirmDel(false); return; }
+    nav("/");
+  }
 
   async function load() {
     const [{ data: l }, { data: it }] = await Promise.all([
@@ -91,11 +110,33 @@ export default function ListDetail() {
     <>
       <div className="flex items-center gap-3 pt-2 pb-4">
         <Link to="/" className="btn-ghost !p-3"><ArrowLeft size={18} /></Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-extrabold tracking-tight truncate">{list?.name ?? "…"}</h1>
-          <p className="muted text-xs">{items.length} pozycji{list?.optimized_at && ` · oferty z ${new Date(list.optimized_at).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" })}`}</p>
-        </div>
+        {renaming ? (
+          <form onSubmit={saveName} className="flex-1 min-w-0 flex gap-2">
+            <input id="listName" className="input !py-2" value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus aria-label="Nazwa listy" />
+            <button className="btn-primary !px-3 !py-2" aria-label="Zapisz nazwę"><Check size={18} /></button>
+            <button type="button" className="btn-ghost !px-3 !py-2" onClick={() => setRenaming(false)} aria-label="Anuluj"><X size={18} /></button>
+          </form>
+        ) : (
+          <>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-extrabold tracking-tight truncate">{list?.name ?? "…"}</h1>
+              <p className="muted text-xs">{items.length} pozycji{list?.optimized_at && ` · oferty z ${new Date(list.optimized_at).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" })}`}</p>
+            </div>
+            <button className="btn-ghost !p-3" onClick={() => { setNewName(list?.name ?? ""); setRenaming(true); }} aria-label="Zmień nazwę listy" title="Zmień nazwę"><Pencil size={18} /></button>
+            <button className="btn-ghost !p-3" onClick={() => setConfirmDel(true)} aria-label="Usuń listę" title="Usuń listę"><Trash2 size={18} /></button>
+          </>
+        )}
       </div>
+      {confirmDel && (
+        <div className="card p-4 mb-4 border-red-500/30">
+          <p className="font-semibold">Usunąć listę „{list?.name}”?</p>
+          <p className="muted text-sm mt-1">Zniknie razem ze wszystkimi pozycjami ({items.length}). Paragony i promocje zostaną.</p>
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <button className="btn-ghost" onClick={() => setConfirmDel(false)}>Anuluj</button>
+            <button className="btn bg-red-600 text-white" onClick={deleteList}>Usuń listę</button>
+          </div>
+        </div>
+      )}
 
       {optimized && (
         <div className="card p-1 grid grid-cols-2 mb-4 text-sm font-semibold">
