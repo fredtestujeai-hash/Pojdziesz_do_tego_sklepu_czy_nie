@@ -36,6 +36,7 @@ export default function Promotions() {
   const [msg, setMsg] = useState("");
   const [storeHint, setStoreHint] = useState<Store | "">("");
   const [confirmLeaf, setConfirmLeaf] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState<"promos" | "leaflets" | null>(null);
 
   async function load() {
     const t = todayStr();
@@ -129,6 +130,26 @@ export default function Promotions() {
     await supabase.from("leaflets").delete().eq("id", id);
   }
 
+  /** Czyści promocje: wszystkie albo tylko te z bieżącego filtra (sklep / kupony). */
+  async function clearPromos() {
+    setConfirmClear(null);
+    let qb = supabase.from("promotions").delete().not("id", "is", null);
+    if (filter === "kupon") qb = qb.eq("source", "kupon");
+    else if (filter !== "all") qb = qb.eq("store", filter);
+    const { error } = await qb;
+    if (error) setErr("Nie udało się usunąć promocji: " + error.message);
+    else setMsg(filter === "all" ? "Usunięto wszystkie promocje." : `Usunięto promocje: ${filter === "kupon" ? "moje kupony" : STORE_META[filter].name}.`);
+    load();
+  }
+  async function clearLeaflets() {
+    setConfirmClear(null);
+    const { error } = await supabase.from("leaflets").delete().not("id", "is", null);
+    if (error) setErr("Nie udało się usunąć gazetek: " + error.message);
+    else setMsg("Usunięto wszystkie gazetki.");
+    load();
+  }
+  const filterLabel = filter === "all" ? "wszystkie" : filter === "kupon" ? "moje kupony" : `wszystkie z ${STORE_META[filter].name}`;
+
   const shown = useMemo(() => promos.filter((p) =>
     (filter === "all" || (filter === "kupon" ? p.source === "kupon" : p.store === filter)) &&
     (!q || `${p.product_name} ${p.brand ?? ""}`.toLowerCase().includes(q.toLowerCase()))), [promos, filter, q]);
@@ -171,7 +192,19 @@ export default function Promotions() {
       {err && <div className="mb-4"><ErrorBox text={err} /></div>}
       {msg && <div className="mb-4 rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 p-3 text-sm">{msg}</div>}
 
-      <h2 className="font-bold mt-2 mb-2">Gazetki</h2>
+      <div className="flex items-center justify-between mt-2 mb-2">
+        <h2 className="font-bold">Gazetki</h2>
+        {leaflets.length > 0 && confirmClear !== "leaflets" && (
+          <button className="text-sm muted flex items-center gap-1" onClick={() => setConfirmClear("leaflets")}><Trash2 size={14} />Usuń wszystkie</button>
+        )}
+      </div>
+      {confirmClear === "leaflets" && (
+        <div className="card p-3 mb-3 flex items-center gap-2">
+          <p className="text-sm flex-1">Usunąć wszystkie gazetki ({leaflets.length})?</p>
+          <button className="btn bg-red-600 text-white !px-3 !py-2 text-sm" onClick={clearLeaflets}>Usuń</button>
+          <button className="btn-ghost !px-3 !py-2 text-sm" onClick={() => setConfirmClear(null)}>Nie</button>
+        </div>
+      )}
       {leaflets.length === 0 ? (
         <p className="muted text-sm mb-5">Brak wgranych gazetek. Przeciągnij PDF-y do pola „Gazetka”.</p>
       ) : (
@@ -196,7 +229,12 @@ export default function Promotions() {
         </div>
       )}
 
-      <h2 className="font-bold mb-2">Promocje z kuponów i zdjęć</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-bold">Promocje z kuponów i zdjęć</h2>
+        {shown.length > 0 && confirmClear !== "promos" && (
+          <button className="text-sm muted flex items-center gap-1" onClick={() => setConfirmClear("promos")}><Trash2 size={14} />Usuń {filter === "all" ? "wszystkie" : "widoczne"}</button>
+        )}
+      </div>
       <div className="relative mb-3">
         <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 muted" />
         <input className="input !pl-10" placeholder="Szukaj produktu…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -209,6 +247,13 @@ export default function Promotions() {
         ))}
       </div>
 
+      {confirmClear === "promos" && (
+        <div className="card p-3 mb-3 flex items-center gap-2">
+          <p className="text-sm flex-1">Usunąć promocje: {filterLabel}{q ? " (wyszukiwanie nie jest brane pod uwagę)" : ""}?</p>
+          <button className="btn bg-red-600 text-white !px-3 !py-2 text-sm" onClick={clearPromos}>Usuń</button>
+          <button className="btn-ghost !px-3 !py-2 text-sm" onClick={() => setConfirmClear(null)}>Nie</button>
+        </div>
+      )}
       {shown.length === 0 && !busy && <Empty icon={<Tags />} title="Brak promocji z kuponów" text="Tu pojawią się promocje odczytane ze zrzutów kuponów i zdjęć gazetek." />}
       <div className="grid gap-2">
         {shown.map((p) => {
