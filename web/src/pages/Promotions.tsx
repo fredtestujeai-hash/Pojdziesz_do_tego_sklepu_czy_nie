@@ -3,6 +3,9 @@ import { ClipboardPaste, Search, Tags, Trash2, Ticket, ExternalLink } from "luci
 import { STORE_META, STORES, supabase, todayStr, zl, type Promotion, type Store } from "../lib/supabase";
 import { runAi } from "../lib/api";
 import { uploadFile } from "../lib/upload";
+import { chunkPages, readPdfText, renderPdfPages } from "../lib/pdf";
+
+const MAX_SCAN_PAGES = 16; // PDF bez tekstu (skan): ile stron maks. wysłać jako obrazy
 import { DropZone, Empty, ErrorBox, PageHeader, Progress, StoreBadge, usePasteImages } from "../components/ui";
 
 export default function Promotions() {
@@ -38,14 +41,38 @@ export default function Promotions() {
     if (!files.length || busy) return;
     setErr(""); setMsg("");
     let total = 0;
+    const notes: string[] = [];
+    const store = couponStore || undefined;
     try {
-      for (const [i, f] of [...files].entries()) {
-        setBusy(`Czytam ${kind === "kupon" ? "kupon" : "stronę gazetki"} ${i + 1}/${files.length}…`);
+      const pdfs = files.filter((f) => f.type === "application/pdf");
+      const images = files.filter((f) => f.type !== "application/pdf");
+
+      // PDF: najpierw tekst (tanio), a gdy to skan — strony jako obrazy
+      for (const [k, f] of pdfs.entries()) {
+        const label = pdfs.length > 1 ? `PDF ${k + 1}/${pdfs.length}` : "PDF";
+        setBusy(`${label}: odczytuję tekst z pliku…`);
+        const pdf = await readPdfText(f);
+        if (pdf.hasText) {
+          const chunks = chunkPages(pdf.pages);
+          for (const [i, text] of chunks.entries()) {
+            setBusy(`${label}: Muse czyta promocje (część ${i + 1}/${chunks.length}, ${pdf.numPages} stron)…`);
+            const job = await runAi({ action: "parse_promo_text", text, store });
+            total += job.result.added;
+          }
+        } else {
+          const pages = await renderPdfPages(pdf.doc, MAX_SCAN_PAGES);
+          if (pdf.numPages > MAX_SCAN_PAGES) notes.push(`„${f.name}” to skan bez tekstu — odczytano pierwsze ${MAX_SCAN_PAGES} z ${pdf.numPages} stron.`);
+          images.push(...pages);
+        }
+      }
+
+      for (const [i, f] of images.entries()) {
+        setBusy(`Czytam ${kind === "kupon" ? "kupon" : "stronę gazetki"} ${i + 1}/${images.length}…`);
         const path = await uploadFile(f, "coupons");
-        const job = await runAi({ action: "parse_coupon", image_path: path, store: couponStore || undefined, kind });
+        const job = await runAi({ action: "parse_coupon", image_path: path, store, kind });
         total += job.result.added;
       }
-      setMsg(`${kind === "kupon" ? "Z kuponów" : "Z gazetki"} dodano ${total} promocji.`);
+      setMsg([`${kind === "kupon" ? "Z kuponów" : "Z gazetki"} dodano ${total} promocji.`, ...notes].join(" "));
       load();
     } catch (e: any) { setErr(e.message); } finally { setBusy(null); }
   }
@@ -67,8 +94,8 @@ export default function Promotions() {
     <>
       <PageHeader title="Promocje" subtitle={`${promos.length} aktywnych ofert z gazetek i kuponów`} />
       <div className="grid grid-cols-2 gap-2 mb-2">
-        <DropZone title="Kupon" text="Przeciągnij zrzuty kuponów (Lidl Plus, Moja Biedronka, Aldi) albo kliknij" accept="image/*" disabled={!!busy} onFiles={(f) => onImages(f, "kupon")} />
-        <DropZone title="Gazetka" text="Przeciągnij zdjęcia lub zrzuty stron gazetki albo kliknij" accept="image/*" disabled={!!busy} onFiles={(f) => onImages(f, "gazetka")} />
+        <DropZone title="Kupon" text="Przeciągnij zrzuty kuponów (Lidl Plus, Moja Biedronka, Aldi) lub PDF albo kliknij" accept="image/*,application/pdf" pdf disabled={!!busy} onFiles={(f) => onImages(f, "kupon")} />
+        <DropZone title="Gazetka" text="Przeciągnij PDF gazetki, zdjęcia lub zrzuty stron albo kliknij" accept="image/*,application/pdf" pdf disabled={!!busy} onFiles={(f) => onImages(f, "gazetka")} />
       </div>
       <p className="muted text-xs mb-2">Możesz też wkleić zrzut ekranu skrótem Ctrl+V — trafi jako kupon.</p>
       <div className="card p-3 mb-3">
