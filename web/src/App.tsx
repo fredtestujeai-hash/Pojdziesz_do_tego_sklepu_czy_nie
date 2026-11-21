@@ -8,7 +8,7 @@ import Lists from "./pages/Lists";
 import ListDetail from "./pages/ListDetail";
 import Promotions from "./pages/Promotions";
 import Receipts from "./pages/Receipts";
-import { Spinner } from "./components/ui";
+import { ErrorBox, Spinner } from "./components/ui";
 
 const Stats = lazy(() => import("./pages/Stats"));
 
@@ -22,6 +22,7 @@ const tabs = [
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [member, setMember] = useState<"checking" | "ok" | string>("checking");
+  const [recovery, setRecovery] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -31,13 +32,17 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data } = supabase.auth.onAuthStateChange((e, s) => {
+      setSession(s);
+      if (e === "PASSWORD_RECOVERY") setRecovery(true);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
   if (session === undefined)
     return <div className="min-h-dvh grid place-items-center"><Spinner className="text-brand" /></div>;
   if (!session) return <Login />;
+  if (recovery) return <NewPassword onDone={() => setRecovery(false)} />;
   if (member === "checking")
     return <div className="min-h-dvh grid place-items-center"><Spinner className="text-brand" /></div>;
   if (member !== "ok")
@@ -82,6 +87,30 @@ export default function App() {
           ))}
         </div>
       </nav>
+    </div>
+  );
+}
+
+function NewPassword({ onDone }: { onDone: () => void }) {
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) setErr(/at least 6/i.test(error.message) ? "Hasło musi mieć co najmniej 6 znaków." : error.message);
+    else onDone();
+  }
+  return (
+    <div className="min-h-dvh grid place-items-center px-5">
+      <form onSubmit={save} className="card p-5 w-full max-w-sm space-y-3">
+        <p className="font-bold text-lg">Ustaw nowe hasło</p>
+        <input className="input" type="password" autoComplete="new-password" placeholder="Nowe hasło (min. 6 znaków)" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={6} />
+        {err && <ErrorBox text={err} />}
+        <button className="btn-primary w-full" disabled={busy}>{busy && <Spinner />}Zapisz hasło</button>
+      </form>
     </div>
   );
 }
