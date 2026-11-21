@@ -178,7 +178,7 @@ export default function ListDetail() {
             <div className="space-y-2">
               <button className="btn-primary w-full !py-4 text-base" onClick={optimize}><Wand2 size={20} />Znajdź najlepsze oferty</button>
               <p className="muted text-xs text-center">
-                Porównuje listę z promocjami z gazetek i kuponów dodanych w zakładce <Link to="/promocje" className="underline">Promocje</Link>.
+                Szuka produktów z listy w gazetkach (PDF) i kuponach dodanych w zakładce <Link to="/promocje" className="underline">Promocje</Link>.
                 Pozycje bez promocji trafiają do Lidla. Koszt: kilka–kilkanaście groszy.
               </p>
             </div>

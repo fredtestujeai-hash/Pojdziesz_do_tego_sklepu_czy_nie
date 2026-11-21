@@ -239,8 +239,50 @@ async function optimizeList(jobId: string, userId: string, listId: string, refre
       .map((x) => x.p);
     candidates.set(i.id, scored);
   }
-  const withCands = items.filter((i) => (candidates.get(i.id) ?? []).length > 0);
-  const promos = [...new Map(withCands.flatMap((i) => candidates.get(i.id)!).map((p) => [p.id, p])).values()];
+  // Gazetki zapisane jako tekst (z ostatnich 9 dni): szukamy w kodzie linii z nazwą produktu
+  // i bierzemy ją razem z sąsiednimi liniami (tam zwykle stoi cena). Do AI idą tylko te fragmenty.
+  const since = new Date(Date.now() - 9 * 864e5).toISOString();
+  const { data: leafs } = await admin.from("leaflets").select("id, store, name").gte("created_at", since);
+  const { data: pages } = leafs?.length
+    ? await admin.from("leaflet_pages").select("leaflet_id, page, text").in("leaflet_id", leafs.map((l) => l.id))
+    : { data: [] as { leaflet_id: string; page: number; text: string }[] };
+  const storeOf = new Map((leafs ?? []).map((l) => [l.id, l.store as Store]));
+  type Line = { store: Store; key: string; lines: string[]; idx: number; stems: string[] };
+  const allLines: Line[] = [];
+  for (const pg of (pages ?? []) as { leaflet_id: string; page: number; text: string }[]) {
+    const lines: string[] = pg.text.split("\n").map((l) => l.trim()).filter(Boolean);
+    lines.forEach((l, idx) => allLines.push({ store: storeOf.get(pg.leaflet_id)!, key: `${pg.leaflet_id}:${pg.page}`, lines, idx, stems: stems(l) }));
+  }
+  const snippetsFor = new Map<string, { id: string; store: Store; text: string }[]>();
+  const snippetById = new Map<string, { id: string; store: Store; text: string }>();
+  const seenWin = new Map<string, string>();
+  for (const i of items) {
+    const want = stems(`${i.name} ${i.note ?? ""}`);
+    if (!want.length) continue;
+    const scored = allLines.map((l) => ({ l, s: matchScore(want, l.stems) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+    const perStore = new Map<Store, number>();
+    const picked: { id: string; store: Store; text: string }[] = [];
+    for (const { l } of scored) {
+      if ((perStore.get(l.store) ?? 0) >= 2) continue; // maks. 2 fragmenty na sklep na produkt
+      const from = Math.max(0, l.idx - 1), to = Math.min(l.lines.length, l.idx + 4);
+      const win = `${l.key}:${from}`;
+      let id = seenWin.get(win);
+      if (!id) {
+        if (snippetById.size >= 150) break; // twardy limit wielkości zapytania
+        id = `S${snippetById.size + 1}`;
+        seenWin.set(win, id);
+        snippetById.set(id, { id, store: l.store, text: l.lines.slice(from, to).join(" / ").slice(0, 320) });
+      }
+      picked.push(snippetById.get(id)!);
+      perStore.set(l.store, (perStore.get(l.store) ?? 0) + 1);
+      if (picked.length >= 6) break;
+    }
+    snippetsFor.set(i.id, picked);
+  }
+
+  const withCands = items.filter((i) => (candidates.get(i.id) ?? []).length > 0 || (snippetsFor.get(i.id) ?? []).length > 0);
+  const promos = [...new Map(withCands.flatMap((i) => candidates.get(i.id) ?? []).map((p) => [p.id, p])).values()];
+  const snippets = [...new Map(withCands.flatMap((i) => snippetsFor.get(i.id) ?? []).map((s) => [s.id, s])).values()];
 
   const promoLines = promos
     .map(
@@ -263,9 +305,9 @@ async function optimizeList(jobId: string, userId: string, listId: string, refre
     }
     const summary = {
       per_store: { lidl: { items: items.length, total: 0, savings: 0 } },
-      verdict: (allPromos ?? []).length
-        ? "Żadna zapisana promocja nie pasuje do tej listy — wszystko kup w Lidlu."
-        : "Brak zapisanych promocji. Dodaj zrzuty lub tekst gazetek w zakładce Promocje, a potem sprawdź listę ponownie.",
+      verdict: (allPromos ?? []).length || (leafs ?? []).length
+        ? "Nic w gazetkach ani kuponach nie pasuje do tej listy — wszystko kup w Lidlu."
+        : "Brak gazetek i kuponów. Dodaj PDF-y gazetek w zakładce Promocje, a potem sprawdź listę ponownie.",
       refresh: refreshResult, ai: false, at: new Date().toISOString(),
     };
     await admin.from("shopping_lists").update({ status: "optimized", optimized_at: new Date().toISOString(), summary }).eq("id", listId);
@@ -300,10 +342,14 @@ async function optimizeList(jobId: string, userId: string, listId: string, refre
       "3. Promocje ze źródła 'kupon' traktuj jako dostępne dla użytkownika.\n" +
       "4. Jeśli wyjście do dodatkowego sklepu daje łącznie mniej niż ok. 8 zł oszczędności, przenieś te pozycje do Lidla i zaznacz to w note.\n" +
       "5. promo_id musi być dokładnie identyfikatorem z listy promocji albo null. Warunki promocji (np. aplikacja, wielosztuki) opisz w note.\n" +
-      "6. alternatives: do 2 innych ofert dla tej pozycji (mogą być puste).",
+      "6. alternatives: do 2 innych ofert dla tej pozycji (mogą być puste).\n" +
+      "7. FRAGMENTY GAZETEK to surowy tekst z PDF-ów (linie rozdzielone ' / '). Odczytaj z nich cenę promocyjną produktu " +
+      "(i regularną, jeśli jest). Dla oferty z fragmentu promo_id = null, a w label podaj produkt i cenę. " +
+      "Jeśli z fragmentu nie da się jednoznacznie ustalić ceny tego produktu, nie używaj go.",
     content:
       `Dziś: ${t}.\n\nLISTA (id | nazwa | ilość | uwagi):\n${itemLines}\n\n` +
-      `PROMOCJE (id | sklep | produkt | cena zł/jedn. | warunki):\n${promoLines}`,
+      (promoLines ? `PROMOCJE (id | sklep | produkt | cena zł/jedn. | warunki):\n${promoLines}\n\n` : "") +
+      (snippets.length ? `FRAGMENTY GAZETEK (id | sklep | tekst):\n${snippets.map((s) => `${s.id} | ${s.store} | ${s.text}`).join("\n")}` : ""),
     schema,
     effort: "low",
   });
