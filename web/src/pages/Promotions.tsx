@@ -6,6 +6,16 @@ import { uploadFile } from "../lib/upload";
 import { chunkPages, readPdfText, renderPdfPages } from "../lib/pdf";
 
 const MAX_SCAN_PAGES = 16; // PDF bez tekstu (skan): ile stron maks. wysłać jako obrazy
+
+async function sha256(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text.replace(/\s+/g, " ").trim()));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+/** Czy identyczny fragment gazetki był już przeczytany (nie płacimy drugi raz). */
+async function alreadyRead(hash: string): Promise<boolean> {
+  const { data } = await supabase.from("jobs").select("id").eq("kind", "parse_promo_text").eq("status", "done").eq("input->>hash", hash).limit(1);
+  return !!data?.length;
+}
 import { DropZone, Empty, ErrorBox, PageHeader, Progress, StoreBadge, usePasteImages } from "../components/ui";
 
 export default function Promotions() {
@@ -30,7 +40,9 @@ export default function Promotions() {
     if (pasteText.trim().length < 10 || busy) return;
     setErr(""); setMsg(""); setBusy("Odczytuję promocje z tekstu…");
     try {
-      const job = await runAi({ action: "parse_promo_text", text: pasteText, store: couponStore || undefined });
+      const hash = await sha256(pasteText);
+      if (await alreadyRead(hash)) { setMsg("Ten tekst był już przeczytany — pominięto (bez kosztów)."); setPasteText(""); return; }
+      const job = await runAi({ action: "parse_promo_text", text: pasteText, store: couponStore || undefined, hash });
       setMsg(`Z tekstu gazetki dodano ${job.result.added} promocji (znaleziono ${job.result.found}).`);
       setPasteText(""); setShowPaste(false);
       load();
@@ -56,14 +68,17 @@ export default function Promotions() {
         catch { notes.push(`„${f.name}”: nie udało się otworzyć pliku PDF.`); continue; }
         if (pdf.hasText) {
           const chunks = chunkPages(pdf.pages);
-          let fromFile = 0;
+          let fromFile = 0, skipped = 0;
           for (const [i, text] of chunks.entries()) {
+            const hash = await sha256(text);
+            if (await alreadyRead(hash)) { skipped++; continue; }
             setBusy(`${label}: Muse czyta promocje (część ${i + 1}/${chunks.length}, ${pdf.numPages} stron)…`);
-            const job = await runAi({ action: "parse_promo_text", text, store });
+            const job = await runAi({ action: "parse_promo_text", text, store, hash });
             fromFile += job.result.added;
           }
           total += fromFile;
-          if (pdfs.length > 1) notes.push(`„${f.name}”: ${fromFile}.`);
+          if (skipped === chunks.length) notes.push(`„${f.name}” był już wcześniej przeczytany — pominięto (bez kosztów).`);
+          else if (pdfs.length > 1) notes.push(`„${f.name}”: ${fromFile}${skipped ? ` (pominięto ${skipped} przeczytane już części)` : ""}.`);
         } else {
           const pages = await renderPdfPages(pdf.doc, MAX_SCAN_PAGES);
           if (pdf.numPages > MAX_SCAN_PAGES) notes.push(`„${f.name}” to skan bez tekstu — odczytano pierwsze ${MAX_SCAN_PAGES} z ${pdf.numPages} stron.`);

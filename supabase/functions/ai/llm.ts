@@ -124,6 +124,16 @@ async function metaResearch(o: { system: string; prompt: string }): Promise<stri
   return metaText(res);
 }
 
+/** Zwykła odpowiedź tekstowa (bez JSON-a) — najtańsza forma dla długich list. */
+async function metaPlain(o: { system: string; content: Content; effort?: Effort | "minimal" }): Promise<string> {
+  const res = await metaCall({
+    reasoning: { effort: o.effort ?? "minimal" },
+    instructions: o.system,
+    input: metaInput(o.content),
+  });
+  return metaText(res);
+}
+
 // ---------- Claude (opcjonalnie) ----------
 async function anthropic() {
   const { default: Anthropic } = await import("npm:@anthropic-ai/sdk@1.12.0");
@@ -168,6 +178,24 @@ export async function structured<T>(o: {
     })
     .finalMessage();
   return JSON.parse(claudeText(msg)) as T;
+}
+
+export async function plain(o: { system: string; content: Content; effort?: Effort | "minimal" }): Promise<string> {
+  if (PROVIDER !== "anthropic") return metaPlain(o);
+  const c = await anthropic();
+  const msg = await c.beta.messages
+    .stream({
+      model: "claude-opus-5-5",
+      max_tokens: 32000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system: o.system,
+      output_config: { effort: "low" },
+      // deno-lint-ignore no-explicit-any
+      messages: [{ role: "user", content: claudeContent(o.content) as any }],
+    })
+    .finalMessage();
+  return claudeText(msg);
 }
 
 export async function research(o: { system: string; prompt: string }): Promise<string> {

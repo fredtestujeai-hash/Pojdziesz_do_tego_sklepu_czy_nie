@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.119.2";
 import { encodeBase64 } from "jsr:@std/encoding@1/base64";
-import { configError, imageBlock, research, structured } from "./llm.ts";
+import { configError, imageBlock, plain, research, structured } from "./llm.ts";
 
 const STORES = ["lidl", "biedronka", "aldi"] as const;
 type Store = (typeof STORES)[number];
@@ -95,6 +95,39 @@ async function insertPromos(promos: Promo[], source: "gazetka" | "kupon", userId
   const { error } = await admin.from("promotions").insert(rows);
   if (error) throw error;
   return rows.length;
+}
+
+// ---------- promocje jako linie tekstu (tańsze niż JSON) ----------
+const LINE_FORMAT =
+  "Odpowiedz WYŁĄCZNIE liniami w formacie (bez nagłówka, numeracji i komentarzy):\n" +
+  "sklep|produkt|marka|cena|cena_reg|jednostka|warunki|od|do\n" +
+  "sklep: lidl, biedronka albo aldi. Ceny liczbą z kropką. Puste pole, gdy brak danych. Daty RRRR-MM-DD. " +
+  "Cena = cena promocyjna za podaną jednostkę; przy wielosztukach cena za sztukę w promocji, a warunek w polu warunki. " +
+  "Pomiń pozycje bez konkretnej ceny. Jeśli nie ma żadnych promocji, nie wypisuj nic.";
+const SKIP_NONFOOD =
+  "Wypisz tylko artykuły spożywcze, napoje, chemię domową, kosmetyki i artykuły higieniczne. " +
+  "Pomiń odzież, obuwie, narzędzia, elektronikę, AGD, zabawki, artykuły do domu i ogrodu. ";
+
+function num(v: string): number | null {
+  const n = parseFloat(v.replace(",", ".").replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+function parseLines(text: string, storeHint?: Store): Promo[] {
+  const out: Promo[] = [];
+  for (const raw of text.split("\n")) {
+    const f = raw.replace(/^[-*\s]+/, "").split("|").map((x) => x.trim());
+    if (f.length < 4) continue;
+    const store = (STORES as readonly string[]).includes(f[0]?.toLowerCase()) ? (f[0].toLowerCase() as Store) : storeHint;
+    const price = num(f[3] ?? "");
+    if (!store || !f[1] || price == null || price <= 0) continue;
+    const date = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
+    out.push({
+      store, product_name: f[1].slice(0, 200), brand: f[2] || null, price,
+      regular_price: num(f[4] ?? ""), unit: f[5] || null, conditions: f[6] || null,
+      valid_from: date(f[7]), valid_to: date(f[8]), source_url: null,
+    });
+  }
+  return out;
 }
 
 // ---------- 1. Gazetki ----------
@@ -332,35 +365,36 @@ async function loadFile(path: string) {
 // ---------- 4. Kupon ----------
 async function parseCoupon(userId: string, imagePath: string, storeHint?: Store, kind: "kupon" | "gazetka" = "kupon") {
   const block = await loadFile(imagePath);
-  const res = await structured<{ promotions: Promo[] }>({
+  const text = await plain({
     system:
       (kind === "gazetka"
-        ? `Odczytujesz promocje ze zdjęć lub zrzutów ekranu stron gazetek promocyjnych sieci Lidl, Biedronka lub Aldi. Dziś: ${today()}. `
-        : `Odczytujesz kupony i promocje ze zrzutów ekranu aplikacji sklepowych (Lidl Plus, Moja Biedronka, Aldi) lub zdjęć kuponów. Dziś: ${today()}. `) +
-      "Daty YYYY-MM-DD. Jeśli kupon daje rabat procentowy bez ceny, oblicz cenę po rabacie tylko gdy cena regularna jest widoczna; w przeciwnym razie pomiń. " +
-      (storeHint ? `Sklep wskazany przez użytkownika: ${storeHint}.` : "Rozpoznaj sklep po wyglądzie aplikacji/kuponu."),
-    content: [block, { type: "text", text: "Wypisz wszystkie promocje/kupony widoczne na obrazie." }],
-    schema: promoSchema,
+        ? `Odczytujesz promocje ze zdjęcia lub zrzutu strony gazetki sieci Lidl, Biedronka lub Aldi. Dziś: ${today()}. ` + SKIP_NONFOOD
+        : `Odczytujesz kupony i promocje ze zrzutu ekranu aplikacji sklepowej (Lidl Plus, Moja Biedronka, Aldi) lub zdjęcia kuponu. Dziś: ${today()}. ` +
+          "Jeśli kupon daje rabat procentowy bez ceny, oblicz cenę po rabacie tylko gdy cena regularna jest widoczna; w przeciwnym razie pomiń. ") +
+      (storeHint ? `Sklep: ${storeHint}. ` : "Rozpoznaj sklep po wyglądzie. ") +
+      LINE_FORMAT,
+    content: [block, { type: "text", text: "Wypisz promocje widoczne na obrazie." }],
   });
-  const added = await insertPromos(res.promotions, kind, userId, imagePath);
-  return { found: res.promotions.length, added, promotions: res.promotions };
+  const promotions = parseLines(text, storeHint);
+  const added = await insertPromos(promotions, kind, userId, imagePath);
+  return { found: promotions.length, added };
 }
 
 // ---------- 5. Tekst gazetki (wklejony) ----------
 async function parsePromoText(userId: string, text: string, storeHint?: Store) {
   const clean = text.trim().slice(0, 40000);
   if (clean.length < 10) throw new Error("Wklej tekst gazetki (co najmniej kilka słów z cenami).");
-  const res = await structured<{ promotions: Promo[] }>({
+  const out = await plain({
     system:
-      `Wyciągasz promocje z tekstu gazetki sieci Lidl, Biedronka lub Aldi (wklejonego ze strony lub aplikacji). Dziś: ${today()}. ` +
-      "Daty YYYY-MM-DD (rok bieżący, jeśli nie podano). Cena = cena promocyjna za podaną jednostkę; przy wielosztukach cena za sztukę w promocji, warunek opisz. " +
-      "Pomiń pozycje bez konkretnej ceny. source_url = null. " +
-      (storeHint ? `Sklep wskazany przez użytkownika: ${storeHint}.` : "Rozpoznaj sklep z treści."),
+      `Wyciągasz promocje z tekstu gazetki sieci Lidl, Biedronka lub Aldi (z PDF-a lub strony). Dziś: ${today()}; rok bieżący, jeśli nie podano. ` +
+      SKIP_NONFOOD +
+      (storeHint ? `Sklep: ${storeHint}. ` : "Rozpoznaj sklep z treści. ") +
+      LINE_FORMAT,
     content: clean,
-    schema: promoSchema,
   });
-  const added = await insertPromos(res.promotions, "gazetka", userId);
-  return { found: res.promotions.length, added };
+  const promotions = parseLines(out, storeHint);
+  const added = await insertPromos(promotions, "gazetka", userId);
+  return { found: promotions.length, added };
 }
 
 // ---------- 6. Paragon ----------
