@@ -49,16 +49,21 @@ export default function Promotions() {
 
       // PDF: najpierw tekst (tanio), a gdy to skan — strony jako obrazy
       for (const [k, f] of pdfs.entries()) {
-        const label = pdfs.length > 1 ? `PDF ${k + 1}/${pdfs.length}` : "PDF";
+        const label = `${pdfs.length > 1 ? `PDF ${k + 1}/${pdfs.length}` : "PDF"} „${f.name}”`;
         setBusy(`${label}: odczytuję tekst z pliku…`);
-        const pdf = await readPdfText(f);
+        let pdf;
+        try { pdf = await readPdfText(f); }
+        catch { notes.push(`„${f.name}”: nie udało się otworzyć pliku PDF.`); continue; }
         if (pdf.hasText) {
           const chunks = chunkPages(pdf.pages);
+          let fromFile = 0;
           for (const [i, text] of chunks.entries()) {
             setBusy(`${label}: Muse czyta promocje (część ${i + 1}/${chunks.length}, ${pdf.numPages} stron)…`);
             const job = await runAi({ action: "parse_promo_text", text, store });
-            total += job.result.added;
+            fromFile += job.result.added;
           }
+          total += fromFile;
+          if (pdfs.length > 1) notes.push(`„${f.name}”: ${fromFile}.`);
         } else {
           const pages = await renderPdfPages(pdf.doc, MAX_SCAN_PAGES);
           if (pdf.numPages > MAX_SCAN_PAGES) notes.push(`„${f.name}” to skan bez tekstu — odczytano pierwsze ${MAX_SCAN_PAGES} z ${pdf.numPages} stron.`);
