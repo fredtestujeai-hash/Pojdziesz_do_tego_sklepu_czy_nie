@@ -1,0 +1,725 @@
+<title>Pójdziesz do tego sklepu, czy nie</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Układ: jedna kolumna jak paragon (max 720px), lepka belka zakładek, ceny jak naklejki promocyjne */
+:root {
+  --bg: #eef1ef; --surface: #ffffff; --surface-2: #e4e9e6; --line: #d3dad6;
+  --fg: #14201b; --muted: #5b6b64; --tag: #ffd60a; --tag-fg: #14201b;
+  --accent: #0f5d4a; --accent-fg: #ffffff; --good: #127a4b; --bad: #c2410c; --danger: #b42318;
+  --lidl: #0050aa; --biedronka: #e30613; --aldi: #00186b; --aldi-2: #f58220; --lidl-2: #ffe500;
+  --c-lidl: #3b82f6; --c-biedronka: #ef4444; --c-aldi: #14a37f;
+  --display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --r: 14px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1412; --surface: #161e1b; --surface-2: #1f2925; --line: #2b3732;
+  --fg: #e7eeea; --muted: #93a39c; --tag: #ffd60a; --tag-fg: #14201b;
+  --accent: #3fbf98; --accent-fg: #06261d; --good: #4ade80; --bad: #fb923c; --danger: #f87171;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1412; --surface: #161e1b; --surface-2: #1f2925; --line: #2b3732;
+  --fg: #e7eeea; --muted: #93a39c; --tag: #ffd60a; --tag-fg: #14201b;
+  --accent: #3fbf98; --accent-fg: #06261d; --good: #4ade80; --bad: #fb923c; --danger: #f87171;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
+.wrap { max-width: 720px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+h1, h2, h3 { font-family: var(--display); letter-spacing: -.01em; text-wrap: balance; margin: 0 }
+button, input, select, textarea { font: inherit; color: inherit }
+button { cursor: pointer }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.muted { color: var(--muted) }
+.small { font-size: 13px }
+
+header.top { padding-block: 20px 8px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px }
+header.top h1 { font-size: clamp(24px, 6vw, 34px); font-weight: 800; line-height: 1.05 }
+header.top h1 span { background: var(--tag); color: var(--tag-fg); padding: 0 6px; border-radius: 6px; display: inline-block; transform: rotate(-1.5deg) }
+.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg) }
+.tabs a { text-align: center; padding: 9px 4px; border-radius: 10px; text-decoration: none; color: var(--muted); font-weight: 600; font-size: 14px }
+.tabs a[aria-current="page"] { background: var(--fg); color: var(--bg) }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px }
+.stack { display: flex; flex-direction: column; gap: 10px }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+.row > .grow { flex: 1 1 160px; min-width: 0 }
+.input, select.input, textarea.input { width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; outline: none }
+.input:focus { border-color: var(--accent) }
+.btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; background: var(--surface-2); display: inline-flex; gap: 6px; align-items: center; justify-content: center }
+.btn.primary { background: var(--accent); color: var(--accent-fg) }
+.btn.big { width: 100%; padding: 14px; font-size: 16px }
+.btn.danger { color: var(--danger) }
+.btn:disabled { opacity: .5; cursor: default }
+.icon-btn { border: 0; background: none; color: var(--muted); padding: 6px 8px; border-radius: 8px }
+.icon-btn:hover { background: var(--surface-2) }
+
+.store { display: inline-block; font-weight: 800; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; color: #fff; white-space: nowrap }
+.store.lidl { background: var(--lidl); color: var(--lidl-2) }
+.store.biedronka { background: var(--biedronka) }
+.store.aldi { background: var(--aldi); color: var(--aldi-2) }
+.tag { background: var(--tag); color: var(--tag-fg); font-family: var(--mono); font-weight: 700; padding: 2px 7px; border-radius: 6px; white-space: nowrap }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 0 }
+.chip.on { background: var(--fg); color: var(--bg) }
+.chip.good { color: var(--good) }
+.strike { text-decoration: line-through; color: var(--muted) }
+
+.list-row { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit }
+.list-row .grow { flex: 1; min-width: 0 }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.item { display: flex; gap: 12px; align-items: flex-start }
+.item .grow { flex: 1; min-width: 0 }
+.check { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line); background: none; flex: none; display: grid; place-items: center; color: #fff; padding: 0 }
+.check.on { background: var(--good); border-color: var(--good) }
+.done { opacity: .5 }
+.store-head { border-radius: var(--r); padding: 14px; color: #fff; display: flex; justify-content: space-between; align-items: center }
+.store-head.lidl { background: var(--lidl) } .store-head.lidl b { color: var(--lidl-2) }
+.store-head.biedronka { background: var(--biedronka) }
+.store-head.aldi { background: var(--aldi) } .store-head.aldi b { color: var(--aldi-2) }
+.store-head b { font-family: var(--display); font-size: 22px }
+.summary { background: var(--fg); color: var(--bg); border-radius: var(--r); padding: 16px }
+.summary .big { font-family: var(--mono); font-size: 28px; font-weight: 700 }
+.summary .verdict { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--bg) 12%, transparent); font-size: 14px }
+.progress { display: flex; gap: 10px; align-items: center }
+.spin { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; flex: none }
+@keyframes s { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s } }
+.msg { padding: 10px 12px; border-radius: 10px; font-size: 14px }
+.msg.err { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger) }
+.msg.ok { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good) }
+.empty { text-align: center; padding: 28px 16px; color: var(--muted) }
+.empty b { display: block; color: var(--fg); font-family: var(--display); font-size: 18px; margin-bottom: 4px }
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px }
+.kpi .v { font-family: var(--mono); font-size: 22px; font-weight: 700 }
+.kpi .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600 }
+.kpi .h { font-size: 11px; color: var(--muted) }
+.bar { height: 8px; border-radius: 99px; background: var(--surface-2) } .bar > i { display: block; height: 8px; border-radius: 99px; background: var(--accent) }
+.legend { display: flex; gap: 14px; font-size: 12px; flex-wrap: wrap } .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px }
+.chart { width: 100%; overflow-x: auto } .chart svg { display: block; width: 100%; height: auto }
+.chart text { fill: var(--muted); font: 11px var(--body) }
+.drop { border: 2px dashed var(--line); border-radius: var(--r); padding: 18px; text-align: center }
+.drop.over { border-color: var(--accent) }
+details summary { cursor: pointer; font-weight: 600 }
+.sec-title { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0 2px }
+.sec-title h2 { font-size: 20px }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Pójdziesz do tego<br><span>sklepu, czy nie?</span></h1>
+  </header>
+  <nav class="tabs" aria-label="Sekcje">
+    <a href="#listy" data-tab="listy">Listy</a>
+    <a href="#promocje" data-tab="promocje">Promocje</a>
+    <a href="#paragony" data-tab="paragony">Paragony</a>
+    <a href="#statystyki" data-tab="statystyki">Statystyki</a>
+  </nav>
+  <div id="notice"></div>
+  <main id="view"></main>
+</div>
+
+<script>
+(() => {
+  // ---------- narzędzia ----------
+  const STORES = ["lidl", "biedronka", "aldi"];
+  const SN = { lidl: "Lidl", biedronka: "Biedronka", aldi: "Aldi" };
+  const CHART = { lidl: "var(--c-lidl)", biedronka: "var(--c-biedronka)", aldi: "var(--c-aldi)" };
+  const CATS = ["nabiał","pieczywo","mięso i ryby","owoce i warzywa","napoje","słodycze i przekąski","suche i sypkie","mrożonki","chemia i higiena","dziecko","zwierzęta","alkohol","inne"];
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const zl = (n) => (n == null || isNaN(n)) ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(Number(n));
+  const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());
+  const fmtD = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "short" }) : "?";
+  const num = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".").replace(/[^\d.\-]/g, "")); return isNaN(n) ? null : n; };
+  const storeBadge = (s) => STORES.includes(s) ? `<span class="store ${s}">${SN[s]}</span>` : "";
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ł/g, "l").replace(/[^a-z0-9% ]/g, " ").split(/\s+/).filter((w) => w.length > 1);
+  function similar(a, b) {
+    const A = new Set(norm(a)), B = new Set(norm(b));
+    if (!A.size || !B.size) return 0;
+    let inter = 0; A.forEach((w) => { if (B.has(w)) inter++; });
+    return inter / Math.min(A.size, B.size);
+  }
+  const progressHTML = (t) => `<div class="card progress"><div class="spin"></div><div><b>Claude pracuje…</b><div class="muted small">${esc(t)}</div></div></div>`;
+  function errText(e) {
+    const c = e?.code;
+    if (c === "not_granted") return "Nie zezwolono tej stronie na korzystanie z Claude. Zezwól w ustawieniach artefaktu.";
+    if (c === "rate_limited") return "Osiągnięto limit użycia Claude. Spróbuj za chwilę.";
+    if (c === "invalid_json") return "Claude zwrócił nieczytelną odpowiedź. Spróbuj ponownie.";
+    if (c === "image_rejected") return "Tego zdjęcia nie da się odczytać. Wybierz plik JPG lub PNG.";
+    if (c === "images_unavailable") return "W tym widoku nie można wysyłać zdjęć do Claude.";
+    if (c === "refused") return "Claude odmówił przetworzenia tych danych.";
+    if (c === "invalid_argument") return "Nie masz uprawnień do zapisu w tej aplikacji (poproś właściciela o dostęp „Contributor”).";
+    if (c === "quota_exceeded") return "Baza jest pełna. Usuń stare promocje lub listy.";
+    return e?.message || "Coś poszło nie tak. Spróbuj ponownie.";
+  }
+
+  // ---------- stan ----------
+  let db = null, user = null, sample = null, canWrite = true, myId = null, imgLimits = null;
+  const S = { lists: [], promos: [], receipts: [], items: [], itemsFor: null };
+  let unsubItems = null;
+  const subs = [];
+
+  // ---------- routing ----------
+  function route() {
+    const h = (location.hash || "#listy").slice(1);
+    let tab = h.startsWith("lista-") ? "listy" : h;
+    if (!["listy", "promocje", "paragony", "statystyki"].includes(tab) && !h.startsWith("lista-")) tab = "listy";
+    document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.tab === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    if (h.startsWith("lista-")) return viewList(h.slice(6));
+    if (unsubItems) { unsubItems(); unsubItems = null; S.itemsFor = null; }
+    ({ listy: viewLists, promocje: viewPromos, paragony: viewReceipts, statystyki: viewStats })[tab]();
+  }
+  window.addEventListener("hashchange", route);
+
+  // ---------- LISTY ----------
+  function viewLists() {
+    $("#view").innerHTML = `
+      <form id="newList" class="card row" style="margin-bottom:14px">
+        <input id="newListName" class="input grow" placeholder="Nazwa nowej listy, np. Weekend" autocomplete="off">
+        <button class="btn primary" ${canWrite ? "" : "disabled"}>Nowa lista</button>
+      </form>
+      <div id="listsBox" class="stack"></div>`;
+    $("#newList").onsubmit = async (e) => {
+      e.preventDefault();
+      if (!db) return;
+      const name = $("#newListName").value.trim() || "Zakupy " + new Date().toLocaleDateString("pl-PL", { day: "numeric", month: "long" });
+      try {
+        const ref = await db.collection("lists").add({ name, status: "draft", createdAt: new Date().toISOString(), createdBy: myId, verdict: null, optimizedAt: null });
+        location.hash = "lista-" + ref.id;
+      } catch (err) { note(errText(err), "err"); }
+    };
+    renderLists();
+  }
+  function renderLists() {
+    const box = $("#listsBox"); if (!box) return;
+    if (!db) { box.innerHTML = `<div class="card empty"><b>Łączenie z bazą…</b>Jeśli to trwa długo, odśwież stronę w Claude.</div>`; return; }
+    if (!S.lists.length) { box.innerHTML = `<div class="card empty"><b>Nie macie jeszcze list</b>Utwórz pierwszą listę powyżej. Potem dodajcie produkty, a Claude dobierze sklepy.</div>`; return; }
+    const st = { draft: "Szkic", optimized: "Gdzie kupić gotowe", done: "Zrobione" };
+    box.innerHTML = S.lists.map((l) => `
+      <a class="card list-row" href="#lista-${esc(l.id)}">
+        <div class="grow">
+          <div style="font-weight:700" class="ellipsis">${esc(l.name)}</div>
+          <div class="row small muted" style="margin-top:4px"><span class="chip ${l.status === "optimized" ? "on" : ""}">${st[l.status] || "Szkic"}</span>${new Date(l.createdAt).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}</div>
+        </div>
+        <span class="muted" aria-hidden="true">›</span>
+      </a>`).join("");
+  }
+
+  // ---------- SZCZEGÓŁ LISTY ----------
+  let listMode = "edit", busy = null, listErr = "";
+  function viewList(id) {
+    if (S.itemsFor !== id) {
+      if (unsubItems) unsubItems();
+      S.items = []; S.itemsFor = id; listMode = "edit"; listErr = "";
+      if (db) unsubItems = db.collection(`lists/${id}/items`).orderBy("pos").onSnapshot((snap) => {
+        S.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (S.items.some((i) => i.store) && listMode === "edit" && !viewList.touched) listMode = "shop";
+        renderItems();
+      }, (e) => note(errText(e), "err"));
+      viewList.touched = false;
+    }
+    $("#view").innerHTML = `
+      <div class="row" style="margin-bottom:12px">
+        <a href="#listy" class="btn" aria-label="Wróć do list">‹</a>
+        <div class="grow"><h2 id="listTitle" class="ellipsis" style="font-size:24px">…</h2><div id="listSub" class="muted small"></div></div>
+      </div>
+      <div id="modeSwitch"></div>
+      <div id="editBox">
+        <form id="addItem" class="card stack" style="margin-bottom:12px">
+          <input id="itemName" class="input" placeholder="Co kupić? np. masło 82%" autocomplete="off">
+          <div class="row">
+            <input id="itemQty" class="input" type="number" min="1" step="1" value="1" style="width:84px" aria-label="Ilość">
+            <input id="itemNote" class="input grow" placeholder="Uwagi: marka, gramatura" autocomplete="off">
+            <button class="btn primary" ${canWrite ? "" : "disabled"}>Dodaj</button>
+          </div>
+        </form>
+      </div>
+      <div id="itemsBox"></div>
+      <div id="listActions" style="margin-top:14px"></div>`;
+    $("#addItem").onsubmit = async (e) => {
+      e.preventDefault();
+      const name = $("#itemName").value.trim(); if (!name || !db) return;
+      const qty = Math.max(1, num($("#itemQty").value) || 1);
+      const noteV = $("#itemNote").value.trim() || null;
+      $("#itemName").value = ""; $("#itemNote").value = ""; $("#itemQty").value = 1; $("#itemName").focus();
+      try { await db.collection(`lists/${id}/items`).add({ name, qty, note: noteV, checked: false, pos: Date.now(), createdBy: myId }); }
+      catch (err) { note(errText(err), "err"); }
+    };
+    renderItems();
+  }
+  function curList() { return S.lists.find((l) => l.id === S.itemsFor); }
+  function renderItems() {
+    const box = $("#itemsBox"); if (!box) return;
+    const l = curList();
+    $("#listTitle").textContent = l?.name ?? "Lista";
+    $("#listSub").textContent = `${S.items.length} pozycji` + (l?.optimizedAt ? ` · oferty dobrane ${new Date(l.optimizedAt).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" })}` : "");
+    const optimized = S.items.some((i) => i.store);
+    $("#modeSwitch").innerHTML = optimized ? `<div class="card row" style="padding:4px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr">
+        <button class="btn ${listMode === "edit" ? "primary" : ""}" data-mode="edit">Lista</button>
+        <button class="btn ${listMode === "shop" ? "primary" : ""}" data-mode="shop">Gdzie kupić</button></div>` : "";
+    $("#modeSwitch").querySelectorAll("[data-mode]").forEach((b) => b.onclick = () => { listMode = b.dataset.mode; viewList.touched = true; renderItems(); });
+    $("#editBox").hidden = listMode !== "edit";
+    if (listMode === "edit") renderEdit(box); else renderShop(box);
+  }
+  function renderEdit(box) {
+    box.innerHTML = S.items.length ? `<div class="stack">${S.items.map((i) => `
+      <div class="card row">
+        <div class="grow"><div style="font-weight:600" class="ellipsis">${esc(i.name)}</div><div class="muted small ellipsis">${esc(i.qty)} szt.${i.note ? " · " + esc(i.note) : ""}</div></div>
+        ${storeBadge(i.store)}
+        <button class="icon-btn" data-del="${esc(i.id)}" aria-label="Usuń ${esc(i.name)}">✕</button>
+      </div>`).join("")}</div>` : `<div class="card empty"><b>Lista jest pusta</b>Dodaj produkty powyżej — wspólnie, oboje widzicie zmiany na żywo.</div>`;
+    box.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => db.doc(`lists/${S.itemsFor}/items/${b.dataset.del}`).delete().catch((e) => note(errText(e), "err")));
+    const act = $("#listActions");
+    if (busy) act.innerHTML = progressHTML(busy);
+    else act.innerHTML = S.items.length ? `
+      <button class="btn primary big" id="optBtn" ${canWrite && sample ? "" : "disabled"}>Znajdź najlepsze oferty</button>
+      <p class="muted small" style="text-align:center;margin:8px 0 0">Claude porówna listę z zapisanymi promocjami (${activePromos().length} aktywnych) z gazetek i Waszych kuponów. Bez promocji — Lidl.</p>
+      ${listErr ? `<div class="msg err" style="margin-top:8px">${esc(listErr)}</div>` : ""}
+      ${sample ? "" : `<p class="muted small" style="text-align:center">Claude jest niedostępny w tym widoku.</p>`}` : "";
+    const ob = $("#optBtn"); if (ob) ob.onclick = optimize;
+  }
+  function renderShop(box) {
+    const l = curList();
+    let total = 0, savings = 0;
+    S.items.forEach((i) => { const q = Number(i.qty) || 1; if (i.price != null) total += i.price * q; if (i.price != null && i.regular != null && i.regular > i.price) savings += (i.regular - i.price) * q; });
+    const groups = {}; S.items.forEach((i) => (groups[i.store || "none"] ??= []).push(i));
+    let html = `<div class="summary" style="margin-bottom:14px">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div><div class="small" style="opacity:.75">Szacowany koszt (pozycje z ceną)</div><div class="big">${zl(total)}</div></div>
+        ${savings > 0 ? `<div style="text-align:right"><div class="small" style="opacity:.75">Oszczędzasz</div><div class="big" style="color:var(--tag)">${zl(savings)}</div></div>` : ""}
+      </div>
+      ${l?.verdict ? `<div class="verdict">${esc(l.verdict)}</div>` : ""}
+    </div>`;
+    STORES.filter((s) => groups[s]?.length).forEach((s) => {
+      const its = groups[s]; const sum = its.reduce((a, i) => a + (i.price ?? 0) * (Number(i.qty) || 1), 0);
+      html += `<section class="stack" style="margin-bottom:16px">
+        <div class="store-head ${s}"><div><b>${SN[s]}</b><div class="small" style="opacity:.85">${its.filter((i) => i.checked).length}/${its.length} w koszyku</div></div><div class="num" style="font-weight:700;font-size:18px">${sum ? zl(sum) : ""}</div></div>
+        ${its.map((i) => `
+          <div class="card item ${i.checked ? "done" : ""}">
+            <button class="check ${i.checked ? "on" : ""}" data-check="${esc(i.id)}" aria-label="${i.checked ? "Odznacz" : "Mam w koszyku"}: ${esc(i.name)}">${i.checked ? "✓" : ""}</button>
+            <div class="grow">
+              <div class="row" style="justify-content:space-between;align-items:flex-start">
+                <div style="font-weight:600;min-width:0">${esc(i.name)} <span class="muted" style="font-weight:400">×${esc(i.qty)}</span></div>
+                <div style="text-align:right">${i.price != null ? `<span class="tag">${zl(i.price)}</span>` : `<span class="muted num">—</span>`}${i.regular != null && i.price != null && i.regular > i.price ? `<div class="small strike num">${zl(i.regular)}</div>` : ""}</div>
+              </div>
+              ${i.label ? `<div class="small" style="margin-top:4px;color:var(--accent);font-weight:600">${esc(i.label)}</div>` : ""}
+              ${i.aiNote ? `<div class="small muted" style="margin-top:2px">${esc(i.aiNote)}</div>` : ""}
+              ${(i.alternatives || []).filter((a) => a.store !== s && STORES.includes(a.store)).length ? `<div class="row" style="margin-top:8px">${i.alternatives.filter((a) => a.store !== s && STORES.includes(a.store)).map((a, k) => `<button class="chip" data-move="${esc(i.id)}" data-alt="${k}" title="${esc(a.label)}">→ ${SN[a.store]} ${zl(a.price)}</button>`).join("")}</div>` : ""}
+            </div>
+          </div>`).join("")}
+      </section>`;
+    });
+    if (groups.none?.length) html += `<div class="card small muted" style="margin-bottom:12px">Nowe pozycje bez sklepu: ${groups.none.map((i) => esc(i.name)).join(", ")}. Wróć do „Lista” i uruchom dobieranie ponownie.</div>`;
+    box.innerHTML = html;
+    box.querySelectorAll("[data-check]").forEach((b) => b.onclick = () => { const it = S.items.find((x) => x.id === b.dataset.check); db.doc(`lists/${S.itemsFor}/items/${it.id}`).update({ checked: !it.checked }).catch((e) => note(errText(e), "err")); });
+    box.querySelectorAll("[data-move]").forEach((b) => b.onclick = () => {
+      const it = S.items.find((x) => x.id === b.dataset.move);
+      const alts = it.alternatives.filter((a) => a.store !== it.store && STORES.includes(a.store)); const a = alts[+b.dataset.alt];
+      const rest = [{ store: it.store, price: it.price, label: it.label || "" }, ...it.alternatives.filter((x) => x !== a)].filter((x) => x.price != null);
+      db.doc(`lists/${S.itemsFor}/items/${it.id}`).update({ store: a.store, price: a.price, label: a.label, aiNote: "Przeniesione ręcznie", alternatives: rest }).catch((e) => note(errText(e), "err"));
+    });
+    $("#listActions").innerHTML = `<div class="row" style="display:grid;grid-template-columns:1fr 1fr"><button class="btn" id="toEdit">Edytuj listę</button><button class="btn" id="finish">${l?.status === "done" ? "Zakończone ✓" : "Zakończ zakupy"}</button></div>`;
+    $("#toEdit").onclick = () => { listMode = "edit"; viewList.touched = true; renderItems(); };
+    $("#finish").onclick = () => db.doc(`lists/${S.itemsFor}`).update({ status: "done" }).catch((e) => note(errText(e), "err"));
+  }
+  function activePromos() { const t = today(); return S.promos.filter((p) => !p.validTo || p.validTo >= t); }
+  async function optimize() {
+    if (!sample) return;
+    const listId = S.itemsFor; listErr = ""; busy = "Dobieram najlepsze sklepy dla każdej pozycji…"; renderItems();
+    const items = S.items.map((i) => ({ id: i.id, name: i.name, qty: i.qty, note: i.note || undefined }));
+    const promos = activePromos().slice(0, 500).map((p) => ({ id: p.id, store: p.store, product: p.product, brand: p.brand || undefined, price: p.price, regular: p.regular ?? undefined, unit: p.unit || undefined, conditions: p.conditions || undefined, validTo: p.validTo || undefined, source: p.source }));
+    const prompt = `Jesteś asystentem zakupowym polskiego gospodarstwa domowego. Dziś jest ${today()}.
+Dopasuj każdą pozycję z LISTY do najlepszej aktywnej PROMOCJI w sklepach Lidl, Biedronka, Aldi. Zasady:
+1. Wybierz najtańszą sensowną ofertę tego samego typu produktu; uwzględnij uwagi (marka, gramatura).
+2. Jeśli żaden sklep nie ma promocji na produkt: store "lidl", promoId null, price null, regular null, label "brak promocji – kup w Lidlu".
+3. Promocje ze źródła "kupon" są dostępne dla użytkownika.
+4. Jeśli pójście do dodatkowego sklepu daje łącznie mniej niż ok. 8 zł oszczędności, przenieś te pozycje do Lidla i napisz to w note.
+5. promoId to dokładnie "id" z listy promocji albo null. Warunki (aplikacja, wielosztuki, limit) opisz w note.
+6. alternatives: do 2 innych ofert dla pozycji (może być pusta tablica).
+7. verdict: 1–3 zdania po polsku — czy warto iść do więcej niż jednego sklepu i ile to daje.
+
+LISTA:
+${JSON.stringify(items)}
+
+PROMOCJE:
+${JSON.stringify(promos)}
+
+Odpowiedz wyłącznie JSON-em w formacie:
+{"assignments":[{"id":"<id pozycji>","store":"lidl|biedronka|aldi","promoId":null,"price":null,"regular":null,"label":"...","note":null,"alternatives":[{"store":"biedronka","price":4.99,"label":"..."}]}],"verdict":"..."}`;
+    try {
+      const res = await sample.json(prompt, { cache: false, modelTier: "default" });
+      const valid = new Set(S.items.map((i) => i.id)); const pids = new Set(promos.map((p) => p.id));
+      const asg = Array.isArray(res?.assignments) ? res.assignments : [];
+      await Promise.all(asg.filter((a) => valid.has(String(a.id))).map((a) => db.doc(`lists/${listId}/items/${a.id}`).update({
+        store: STORES.includes(a.store) ? a.store : "lidl",
+        promoId: a.promoId && pids.has(String(a.promoId)) ? String(a.promoId) : null,
+        price: num(a.price), regular: num(a.regular),
+        label: String(a.label || "").slice(0, 200), aiNote: a.note ? String(a.note).slice(0, 300) : null,
+        alternatives: (Array.isArray(a.alternatives) ? a.alternatives : []).slice(0, 3).map((x) => ({ store: String(x.store), price: num(x.price), label: String(x.label || "").slice(0, 160) })).filter((x) => x.price != null),
+      })));
+      await db.doc(`lists/${listId}`).update({ status: "optimized", optimizedAt: new Date().toISOString(), verdict: String(res?.verdict || "").slice(0, 600) });
+      listMode = "shop"; viewList.touched = true;
+    } catch (e) { listErr = errText(e); }
+    busy = null; if (S.itemsFor === listId) renderItems();
+  }
+
+  // ---------- PROMOCJE ----------
+  let promoFilter = "all", promoQ = "", promoBusy = null, promoMsg = null, promoStore = "";
+  function viewPromos() {
+    const imgs = !!imgLimits;
+    $("#view").innerHTML = `
+      <div class="sec-title"><h2>Promocje</h2><span class="muted small" id="promoCount"></span></div>
+      <div class="card stack" style="margin-bottom:12px">
+        <div style="font-weight:700">Dodaj promocje</div>
+        <div class="row small"><span class="muted">Sklep:</span>
+          ${["", ...STORES].map((s) => `<button class="chip ${promoStore === s ? "on" : ""}" data-pstore="${s}">${s ? SN[s] : "rozpoznaj"}</button>`).join("")}
+        </div>
+        <div class="drop" id="drop" ${imgs ? "" : "hidden"}>
+          <div style="font-weight:600">Zrzut ekranu kuponu lub strony gazetki</div>
+          <div class="muted small">Lidl Plus, Moja Biedronka, Aldi, zdjęcie gazetki · JPG/PNG · możesz wybrać kilka</div>
+          <div class="row" style="justify-content:center;margin-top:10px">
+            <button class="btn primary" id="pickCoupon" ${canWrite && sample ? "" : "disabled"}>Wybierz kupon</button>
+            <button class="btn" id="pickLeaflet" ${canWrite && sample ? "" : "disabled"}>Wybierz gazetkę</button>
+          </div>
+          <input type="file" id="couponFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        </div>
+        <details>
+          <summary>Wklej tekst promocji z gazetki</summary>
+          <div class="stack" style="margin-top:8px">
+            <textarea id="pasteText" class="input" rows="5" placeholder="Wklej tekst ze strony z gazetką, np. „Masło Mlekovita 200 g 4,99 zł zamiast 7,49 zł, 20–23.11”"></textarea>
+            <button class="btn" id="pasteBtn" ${canWrite && sample ? "" : "disabled"}>Odczytaj promocje z tekstu</button>
+          </div>
+        </details>
+        <details>
+          <summary>Dodaj ręcznie</summary>
+          <form id="manual" class="stack" style="margin-top:8px">
+            <div class="row">
+              <select id="mStore" class="input" style="width:auto">${STORES.map((s) => `<option value="${s}">${SN[s]}</option>`).join("")}</select>
+              <input id="mProduct" class="input grow" placeholder="Produkt" required>
+            </div>
+            <div class="row">
+              <input id="mPrice" class="input grow" inputmode="decimal" placeholder="Cena promo, zł" required>
+              <input id="mRegular" class="input grow" inputmode="decimal" placeholder="Cena regularna">
+              <input id="mTo" class="input grow" type="date" aria-label="Ważna do">
+            </div>
+            <button class="btn" ${canWrite ? "" : "disabled"}>Zapisz promocję</button>
+          </form>
+        </details>
+        <div id="promoStatus"></div>
+      </div>
+      <input id="promoQ" class="input" placeholder="Szukaj produktu…" value="${esc(promoQ)}" style="margin-bottom:8px">
+      <div class="row" style="margin-bottom:10px" id="promoFilters"></div>
+      <div id="promoBox" class="stack"></div>`;
+    let leaflet = false;
+    document.querySelectorAll("[data-pstore]").forEach((b) => b.onclick = () => { promoStore = b.dataset.pstore; document.querySelectorAll("[data-pstore]").forEach((x) => x.classList.toggle("on", x === b)); });
+    $("#pickCoupon").onclick = () => { leaflet = false; $("#couponFile").click(); };
+    $("#pickLeaflet").onclick = () => { leaflet = true; $("#couponFile").click(); };
+    $("#couponFile").onchange = (e) => { readPromoImages([...e.target.files], leaflet ? "gazetka" : "kupon"); e.target.value = ""; };
+    const drop = $("#drop");
+    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+    drop.ondragleave = () => drop.classList.remove("over");
+    drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); readPromoImages([...e.dataTransfer.files].filter((f) => f.type.startsWith("image/")), "kupon"); };
+    $("#pasteBtn").onclick = () => { const t = $("#pasteText").value.trim(); if (t) readPromoText(t); };
+    $("#manual").onsubmit = async (e) => {
+      e.preventDefault();
+      const price = num($("#mPrice").value); if (price == null) return;
+      try {
+        await db.collection("promos").add({ store: $("#mStore").value, product: $("#mProduct").value.trim(), brand: null, price, regular: num($("#mRegular").value), unit: null, conditions: null, validFrom: today(), validTo: $("#mTo").value || null, source: "reczna", addedAt: new Date().toISOString(), addedBy: myId });
+        e.target.reset(); setPromoStatus("Zapisano promocję.", "ok");
+      } catch (err) { setPromoStatus(errText(err), "err"); }
+    };
+    $("#promoQ").oninput = (e) => { promoQ = e.target.value; renderPromos(); };
+    renderPromoStatus(); renderPromos();
+  }
+  function setPromoStatus(t, kind) { promoMsg = t ? { t, kind } : null; renderPromoStatus(); }
+  function renderPromoStatus() {
+    const el = $("#promoStatus"); if (!el) return;
+    el.innerHTML = promoBusy ? progressHTML(promoBusy) : promoMsg ? `<div class="msg ${promoMsg.kind}">${esc(promoMsg.t)}</div>` : "";
+  }
+  const PROMO_FORMAT = `{"promotions":[{"store":"lidl|biedronka|aldi","product":"nazwa produktu","brand":null,"price":4.99,"regular":7.49,"unit":"200 g","conditions":"np. z aplikacją, przy zakupie 2 szt.","validFrom":"YYYY-MM-DD","validTo":"YYYY-MM-DD"}]}`;
+  function promoPrompt(kind, extra) {
+    return `Dziś jest ${today()}. ${kind === "kupon"
+      ? "Na obrazie jest kupon lub zrzut ekranu z aplikacji sklepowej (Lidl Plus, Moja Biedronka, Aldi)."
+      : "To strona gazetki promocyjnej sieci Lidl, Biedronka lub Aldi."}
+${promoStore ? `Sklep wskazany przez użytkownika: ${promoStore}.` : "Rozpoznaj sklep po wyglądzie."}
+Wypisz wszystkie widoczne promocje z konkretną ceną. Cena = cena promocyjna za podaną jednostkę (przy wielosztukach — cena za sztukę w promocji, warunek opisz). Jeśli kupon daje tylko procent rabatu, oblicz cenę tylko gdy widać cenę regularną, inaczej pomiń. Brakujące pola = null. Daty w formacie YYYY-MM-DD (rok bieżący, jeśli nie podano).
+${extra || ""}
+Odpowiedz wyłącznie JSON-em: ${PROMO_FORMAT}`;
+  }
+  async function savePromos(list, source) {
+    const t = today(); const act = activePromos();
+    const key = (p) => `${p.store}|${norm(p.product).join(" ")}|${Number(p.price).toFixed(2)}|${p.validTo || ""}`;
+    const seen = new Set(act.map(key)); let added = 0;
+    for (const p of (Array.isArray(list) ? list : [])) {
+      const row = { store: STORES.includes(p.store) ? p.store : (promoStore || null), product: String(p.product || "").trim().slice(0, 160), brand: p.brand ? String(p.brand).slice(0, 80) : null, price: num(p.price), regular: num(p.regular), unit: p.unit ? String(p.unit).slice(0, 40) : null, conditions: p.conditions ? String(p.conditions).slice(0, 200) : null, validFrom: /^\d{4}-\d\d-\d\d$/.test(p.validFrom || "") ? p.validFrom : t, validTo: /^\d{4}-\d\d-\d\d$/.test(p.validTo || "") ? p.validTo : null, source, addedAt: new Date().toISOString(), addedBy: myId };
+      if (!row.store || !row.product || row.price == null || row.price <= 0) continue;
+      if (seen.has(key(row))) continue; seen.add(key(row));
+      await db.collection("promos").add(row); added++;
+    }
+    return added;
+  }
+  async function readPromoImages(files, source) {
+    if (!files.length || !sample) return;
+    let total = 0; setPromoStatus(null);
+    try {
+      for (const [k, f] of files.entries()) {
+        promoBusy = `Czytam ${source === "kupon" ? "kupon" : "gazetkę"} ${k + 1}/${files.length}…`; renderPromoStatus();
+        const res = await sample.json(promoPrompt(source), { images: [f], cache: false });
+        total += await savePromos(res?.promotions, source);
+      }
+      promoBusy = null; setPromoStatus(`Dodano ${total} promocji.`, "ok");
+    } catch (e) { promoBusy = null; setPromoStatus(errText(e), "err"); }
+  }
+  async function readPromoText(text) {
+    promoBusy = "Odczytuję promocje z tekstu…"; setPromoStatus(null); renderPromoStatus();
+    try {
+      const res = await sample.json(promoPrompt("gazetka", "TEKST GAZETKI:\n" + text.slice(0, 60000)), { cache: false });
+      const n = await savePromos(res?.promotions, "gazetka");
+      promoBusy = null; setPromoStatus(`Dodano ${n} promocji.`, "ok"); const ta = $("#pasteText"); if (ta) ta.value = "";
+    } catch (e) { promoBusy = null; setPromoStatus(errText(e), "err"); }
+  }
+  let confirmDel = null;
+  function renderPromos() {
+    const box = $("#promoBox"); if (!box) return;
+    const act = activePromos();
+    $("#promoCount").textContent = `${act.length} aktywnych`;
+    $("#promoFilters").innerHTML = ["all", ...STORES, "kupon"].map((f) => `<button class="chip ${promoFilter === f ? "on" : ""}" data-pf="${f}">${f === "all" ? "Wszystkie" : f === "kupon" ? "Moje kupony" : SN[f]}</button>`).join("");
+    $("#promoFilters").querySelectorAll("[data-pf]").forEach((b) => b.onclick = () => { promoFilter = b.dataset.pf; renderPromos(); });
+    const shown = act.filter((p) => (promoFilter === "all" || (promoFilter === "kupon" ? p.source === "kupon" : p.store === promoFilter)) && (!promoQ || norm(promoQ).every((w) => norm(p.product + " " + (p.brand || "")).join(" ").includes(w))))
+      .sort((a, b) => a.store.localeCompare(b.store) || a.product.localeCompare(b.product, "pl"));
+    if (!shown.length) { box.innerHTML = `<div class="card empty"><b>Brak promocji</b>Dodaj zrzut kuponu lub strony gazetki, wklej tekst gazetki albo poproś Claude w czacie o uzupełnienie aktualnych gazetek.</div>`; return; }
+    box.innerHTML = shown.map((p) => {
+      const pct = p.regular && p.regular > p.price ? Math.round((1 - p.price / p.regular) * 100) : null;
+      return `<div class="card row">
+        <div class="grow">
+          <div class="row" style="gap:6px;margin-bottom:4px">${storeBadge(p.store)}${p.source === "kupon" ? `<span class="chip">kupon</span>` : ""}${pct ? `<span class="chip good">−${pct}%</span>` : ""}</div>
+          <div style="font-weight:600">${esc(p.product)}${p.brand ? `<span class="muted" style="font-weight:400"> · ${esc(p.brand)}</span>` : ""}</div>
+          <div class="muted small">${p.unit ? esc(p.unit) + " · " : ""}${fmtD(p.validFrom)}–${fmtD(p.validTo)}${p.conditions ? " · " + esc(p.conditions) : ""}</div>
+        </div>
+        <div style="text-align:right">
+          <span class="tag">${zl(p.price)}</span>${p.regular ? `<div class="small strike num">${zl(p.regular)}</div>` : ""}
+          <div>${confirmDel === p.id ? `<button class="btn danger small" data-pdel="${esc(p.id)}" style="padding:4px 8px;margin-top:4px">Usuń?</button>` : `<button class="icon-btn" data-pask="${esc(p.id)}" aria-label="Usuń promocję">✕</button>`}</div>
+        </div>
+      </div>`;
+    }).join("");
+    box.querySelectorAll("[data-pask]").forEach((b) => b.onclick = () => { confirmDel = b.dataset.pask; renderPromos(); });
+    box.querySelectorAll("[data-pdel]").forEach((b) => b.onclick = () => { confirmDel = null; db.doc("promos/" + b.dataset.pdel).delete().catch((e) => note(errText(e), "err")); });
+  }
+
+  // ---------- PARAGONY ----------
+  let recBusy = null, recMsg = null, openRec = null, confirmRec = null;
+  function viewReceipts() {
+    $("#view").innerHTML = `
+      <div class="sec-title"><h2>Paragony</h2><span class="muted small" id="recCount"></span></div>
+      <div class="card stack" style="margin-bottom:12px">
+        <button class="btn primary big" id="pickRec" ${canWrite && sample && imgLimits ? "" : "disabled"}>Dodaj zdjęcie paragonu</button>
+        <input type="file" id="recFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <div class="muted small" style="text-align:center">${imgLimits ? "Claude odczyta sklep, datę, pozycje i rabaty. Zdjęcie nie jest zapisywane — tylko odczytane dane." : "W tym widoku nie można wysyłać zdjęć do Claude."}</div>
+        <div id="recStatus"></div>
+      </div>
+      <div id="recBox" class="stack"></div>`;
+    $("#pickRec").onclick = () => $("#recFile").click();
+    $("#recFile").onchange = (e) => { readReceipts([...e.target.files]); e.target.value = ""; };
+    renderRecStatus(); renderReceipts();
+  }
+  function renderRecStatus() { const el = $("#recStatus"); if (el) el.innerHTML = recBusy ? progressHTML(recBusy) : recMsg ? `<div class="msg ${recMsg.kind}">${esc(recMsg.t)}</div>` : ""; }
+  async function readReceipts(files) {
+    if (!files.length || !sample) return;
+    const known = [...new Set(S.receipts.flatMap((r) => (r.items || []).map((i) => i.name)))].slice(0, 400);
+    recMsg = null;
+    try {
+      for (const [k, f] of files.entries()) {
+        recBusy = `Czytam paragon ${k + 1}/${files.length}…`; renderRecStatus();
+        const res = await sample.json(`Odczytaj polski paragon fiskalny ze zdjęcia (Lidl, Biedronka, Aldi lub inny sklep). Dziś jest ${today()}.
+Skróty z paragonu zamień na czytelne nazwy produktów (np. "MLEKO LAC 3,2%1L" → "Mleko Łaciate 3,2% 1l"). Jeśli produkt pasuje do znanej nazwy z listy poniżej, użyj jej dokładnie.
+Rabaty (linie "Rabat", "Upust", "Lidl Plus", "Moja Biedronka") przypisz do pozycji, których dotyczą. unitPrice = cena za sztukę/kg PO rabacie, total = kwota za pozycję PO rabacie, discount = rabat na pozycję (liczba dodatnia, 0 gdy brak).
+category — jedna z: ${CATS.join(", ")}.
+store — "lidl", "biedronka", "aldi" albo "inny".
+Znane nazwy: ${JSON.stringify(known)}
+Odpowiedz wyłącznie JSON-em:
+{"store":"lidl","date":"YYYY-MM-DD","total":123.45,"discount":10.5,"items":[{"name":"...","raw":"tekst z paragonu","category":"nabiał","qty":1,"unitPrice":4.99,"total":4.99,"discount":0}]}`, { images: [f], cache: false });
+        const items = (Array.isArray(res?.items) ? res.items : []).map((i) => ({ name: String(i.name || i.raw || "?").slice(0, 120), raw: String(i.raw || "").slice(0, 120), category: CATS.includes(i.category) ? i.category : "inne", qty: num(i.qty) || 1, unitPrice: num(i.unitPrice), total: num(i.total) ?? 0, discount: Math.abs(num(i.discount) || 0) }));
+        await db.collection("receipts").add({ store: STORES.includes(res?.store) ? res.store : null, date: /^\d{4}-\d\d-\d\d$/.test(res?.date || "") ? res.date : today(), total: num(res?.total) ?? items.reduce((a, i) => a + i.total, 0), discount: Math.abs(num(res?.discount) || 0), items, addedAt: new Date().toISOString(), addedBy: myId });
+      }
+      recBusy = null; recMsg = { t: `Zapisano ${files.length} paragon(y).`, kind: "ok" };
+    } catch (e) { recBusy = null; recMsg = { t: errText(e), kind: "err" }; }
+    renderRecStatus();
+  }
+  function renderReceipts() {
+    const box = $("#recBox"); if (!box) return;
+    $("#recCount").textContent = `${S.receipts.length} zapisanych`;
+    if (!S.receipts.length) { box.innerHTML = `<div class="card empty"><b>Brak paragonów</b>Dodaj zdjęcie paragonu — z nich powstają statystyki wydatków i historia cen.</div>`; return; }
+    const stats = itemStats();
+    box.innerHTML = S.receipts.map((r) => `
+      <div class="card">
+        <button class="row" data-open="${esc(r.id)}" style="width:100%;background:none;border:0;padding:0;text-align:left" aria-expanded="${openRec === r.id}">
+          <div class="grow"><div class="row" style="gap:6px">${r.store ? storeBadge(r.store) : `<span class="chip">inny sklep</span>`}<span class="muted small">${new Date(r.date + "T12:00:00").toLocaleDateString("pl-PL", { dateStyle: "medium" })}</span></div>
+          ${r.discount ? `<div class="small" style="color:var(--good);margin-top:2px">rabaty ${zl(r.discount)}</div>` : ""}</div>
+          <span class="num" style="font-weight:700">${zl(r.total)}</span><span class="muted">${openRec === r.id ? "▴" : "▾"}</span>
+        </button>
+        ${openRec === r.id ? `<div style="margin-top:10px;border-top:1px solid var(--line)">
+          ${(r.items || []).map((i, k) => { const s = stats.get(r.id + ":" + k); return `<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">
+            <div class="grow"><div style="font-weight:500">${esc(i.name)}</div><div class="muted small">${esc(i.qty)} × ${zl(i.unitPrice)} · ${esc(i.category)}${i.discount ? ` · <span style="color:var(--good)">rabat ${zl(i.discount)}</span>` : ""}</div>
+            ${s && s.overpaid > 0.01 ? `<div class="small" style="color:var(--bad)">przepłata ${zl(s.overpaid)} (najtaniej ${zl(s.best)})</div>` : ""}</div>
+            <span class="num">${zl(i.total)}</span></div>`; }).join("")}
+          <div class="row" style="justify-content:flex-end;margin-top:10px">${confirmRec === r.id ? `<button class="btn danger" data-rdel="${esc(r.id)}">Na pewno usunąć?</button>` : `<button class="btn" data-rask="${esc(r.id)}">Usuń paragon</button>`}</div>
+        </div>` : ""}
+      </div>`).join("");
+    box.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => { openRec = openRec === b.dataset.open ? null : b.dataset.open; confirmRec = null; renderReceipts(); });
+    box.querySelectorAll("[data-rask]").forEach((b) => b.onclick = () => { confirmRec = b.dataset.rask; renderReceipts(); });
+    box.querySelectorAll("[data-rdel]").forEach((b) => b.onclick = () => { confirmRec = null; db.doc("receipts/" + b.dataset.rdel).delete().catch((e) => note(errText(e), "err")); });
+  }
+
+  // ---------- STATYSTYKI ----------
+  // Przepłata = (cena jednostkowa z paragonu − najniższa znana cena tego produktu ±7 dni) × ilość
+  function itemStats() {
+    const flat = [];
+    S.receipts.forEach((r) => (r.items || []).forEach((i, k) => flat.push({ key: r.id + ":" + k, r, i, unit: i.unitPrice ?? (i.total / (i.qty || 1)) })));
+    const out = new Map();
+    const dd = (a, b) => Math.abs(new Date(a) - new Date(b)) / 864e5;
+    for (const f of flat) {
+      let best = null;
+      for (const p of S.promos) {
+        if (p.validFrom && dd(p.validFrom, f.r.date) > 7 && p.validFrom > f.r.date) continue;
+        if (p.validTo && p.validTo < f.r.date && dd(p.validTo, f.r.date) > 7) continue;
+        if (similar(p.product, f.i.name) >= 0.6 && (best == null || p.price < best)) best = p.price;
+      }
+      for (const o of flat) if (o !== f && o.i.name === f.i.name && dd(o.r.date, f.r.date) <= 7 && o.unit != null && (best == null || o.unit < best)) best = o.unit;
+      out.set(f.key, { best, overpaid: best != null && f.unit != null ? Math.max(0, f.unit - best) * (f.i.qty || 1) : 0, name: f.i.name });
+    }
+    return out;
+  }
+  let statRange = 12, statProduct = "";
+  function viewStats() {
+    $("#view").innerHTML = `
+      <div class="sec-title"><h2>Statystyki</h2></div>
+      <div class="row" style="margin-bottom:12px" id="rangeBox"></div>
+      <div id="statBox" class="stack"></div>`;
+    renderStats();
+  }
+  function renderStats() {
+    const box = $("#statBox"); if (!box) return;
+    $("#rangeBox").innerHTML = [[3, "3 mies."], [12, "12 mies."], [999, "Wszystko"]].map(([v, l]) => `<button class="chip ${statRange === v ? "on" : ""}" data-range="${v}">${l}</button>`).join("");
+    $("#rangeBox").querySelectorAll("[data-range]").forEach((b) => b.onclick = () => { statRange = +b.dataset.range; renderStats(); });
+    const from = new Date(); from.setMonth(from.getMonth() - statRange); const f = statRange === 999 ? "0000" : from.toISOString().slice(0, 10);
+    const recs = S.receipts.filter((r) => r.date >= f);
+    if (!recs.length) { box.innerHTML = `<div class="card empty"><b>Brak danych</b>Dodaj kilka paragonów — pojawią się wydatki, oszczędności, przepłaty i historia cen.</div>`; return; }
+    const st = itemStats();
+    const spent = recs.reduce((a, r) => a + (r.total || 0), 0);
+    const disc = recs.reduce((a, r) => a + (r.discount || 0), 0);
+    let overpaid = 0; const overBy = new Map();
+    recs.forEach((r) => (r.items || []).forEach((i, k) => { const s = st.get(r.id + ":" + k); if (s?.overpaid > 0.01) { overpaid += s.overpaid; overBy.set(i.name, (overBy.get(i.name) || 0) + s.overpaid); } }));
+    const months = new Map();
+    recs.forEach((r) => { const m = r.date.slice(0, 7); const o = months.get(m) || { lidl: 0, biedronka: 0, aldi: 0, inne: 0 }; o[r.store || "inne"] += r.total || 0; months.set(m, o); });
+    const mKeys = [...months.keys()].sort();
+    const cats = new Map(); recs.forEach((r) => (r.items || []).forEach((i) => cats.set(i.category, (cats.get(i.category) || 0) + (i.total || 0))));
+    const catArr = [...cats.entries()].sort((a, b) => b[1] - a[1]);
+    const products = [...new Set(recs.flatMap((r) => (r.items || []).map((i) => i.name)))].sort((a, b) => a.localeCompare(b, "pl"));
+    box.innerHTML = `
+      <div class="kpis">
+        <div class="card kpi"><div class="l">Wydano</div><div class="v">${zl(spent)}</div><div class="h">${recs.length} paragonów</div></div>
+        <div class="card kpi"><div class="l">Zaoszczędzono</div><div class="v" style="color:var(--good)">${zl(disc)}</div><div class="h">rabaty i promocje z paragonów</div></div>
+        <div class="card kpi"><div class="l">Przepłacono</div><div class="v" style="color:var(--bad)">${zl(overpaid)}</div><div class="h">vs najtańsza znana cena ±7 dni</div></div>
+        <div class="card kpi"><div class="l">Średnio / miesiąc</div><div class="v">${zl(spent / Math.max(1, mKeys.length))}</div><div class="h">${mKeys.length} mies. z danymi</div></div>
+      </div>
+      <div class="card"><h3 style="font-size:17px;margin-bottom:8px">Wydatki miesięcznie</h3>${monthChart(mKeys, months)}</div>
+      <div class="card"><h3 style="font-size:17px;margin-bottom:8px">Na co idą pieniądze</h3><div class="stack">${catArr.map(([c, v]) => `<div class="small"><div class="row" style="justify-content:space-between"><span>${esc(c)}</span><span class="num">${zl(v)}</span></div><div class="bar"><i style="width:${(v / catArr[0][1] * 100).toFixed(1)}%"></i></div></div>`).join("")}</div></div>
+      ${overBy.size ? `<div class="card"><h3 style="font-size:17px;margin-bottom:8px">Gdzie przepłacacie najbardziej</h3>${[...overBy.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, v]) => `<button class="row" data-prod="${esc(n)}" style="width:100%;justify-content:space-between;background:none;border:0;border-bottom:1px solid var(--line);padding:8px 0;text-align:left"><span>${esc(n)}</span><span class="num" style="color:var(--bad)">+${zl(v)}</span></button>`).join("")}</div>` : ""}
+      <div class="card"><h3 style="font-size:17px;margin-bottom:8px">Historia cen produktu</h3>
+        <select id="prodSel" class="input" aria-label="Produkt"><option value="">Wybierz produkt…</option>${products.map((p) => `<option ${p === statProduct ? "selected" : ""}>${esc(p)}</option>`).join("")}</select>
+        <div id="histBox" style="margin-top:10px"></div>
+        <p class="muted small" style="margin:6px 0 0">Ceny z paragonów i promocji (najniższa danego dnia w sklepie).</p>
+      </div>`;
+    box.querySelectorAll("[data-prod]").forEach((b) => b.onclick = () => { statProduct = b.dataset.prod; $("#prodSel").value = statProduct; renderHist(); });
+    $("#prodSel").onchange = (e) => { statProduct = e.target.value; renderHist(); };
+    renderHist();
+  }
+  function legend(stores) { return `<div class="legend">${stores.map((s) => `<span><i style="background:${CHART[s] || "var(--muted)"}"></i>${SN[s] || "Inne"}</span>`).join("")}</div>`; }
+  function monthChart(keys, months) {
+    const W = 640, H = 220, L = 48, B = 26, T = 10;
+    const present = [...STORES, "inne"].filter((s) => keys.some((k) => months.get(k)[s] > 0));
+    const max = Math.max(1, ...keys.map((k) => present.reduce((a, s) => a + months.get(k)[s], 0)));
+    const step = niceStep(max); const top = Math.ceil(max / step) * step;
+    const y = (v) => T + (H - T - B) * (1 - v / top);
+    const bw = Math.min(46, (W - L) / keys.length * 0.6);
+    let g = "";
+    for (let v = 0; v <= top + 1e-9; v += step) g += `<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v)}</text>`;
+    keys.forEach((k, idx) => {
+      const cx = L + (W - L) / keys.length * (idx + 0.5); let acc = 0;
+      present.forEach((s, si) => {
+        const v = months.get(k)[s]; if (!v) return;
+        const y1 = y(acc + v), y0 = y(acc); acc += v;
+        const isTop = present.slice(si + 1).every((s2) => !months.get(k)[s2]);
+        const h = Math.max(0, y0 - y1 - 2);
+        g += `<rect x="${cx - bw / 2}" y="${y1}" width="${bw}" height="${h}" rx="${isTop ? 4 : 0}" fill="${CHART[s] || "var(--muted)"}"><title>${SN[s] || "Inne"} · ${k}: ${zl(v)}</title></rect>`;
+      });
+      g += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${new Date(k + "-15").toLocaleDateString("pl-PL", { month: "short", year: "2-digit" })}</text>`;
+    });
+    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Wydatki miesięcznie według sklepu">${g}</svg></div>${legend(present)}`;
+  }
+  function niceStep(max) { const raw = max / 4; const p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => s >= raw); }
+  function renderHist() {
+    const el = $("#histBox"); if (!el) return;
+    if (!statProduct) { el.innerHTML = ""; return; }
+    const pts = [];
+    S.receipts.forEach((r) => (r.items || []).forEach((i) => { if (i.name === statProduct && r.store) pts.push({ store: r.store, date: r.date, price: i.unitPrice ?? i.total / (i.qty || 1), src: "paragon" }); }));
+    S.promos.forEach((p) => { if (similar(p.product, statProduct) >= 0.6) pts.push({ store: p.store, date: p.validFrom || (p.addedAt || "").slice(0, 10), price: p.price, src: "promocja" }); });
+    const byKey = new Map(); pts.forEach((p) => { const k = p.store + p.date; if (!byKey.has(k) || byKey.get(k).price > p.price) byKey.set(k, p); });
+    const data = [...byKey.values()].filter((p) => p.price != null && p.date).sort((a, b) => a.date.localeCompare(b.date));
+    if (!data.length) { el.innerHTML = `<p class="muted small">Brak notowań dla tego produktu.</p>`; return; }
+    const W = 640, H = 220, L = 48, B = 26, T = 12, R = 14;
+    const t0 = new Date(data[0].date).getTime(), t1 = Math.max(t0 + 864e5, new Date(data[data.length - 1].date).getTime());
+    const lo = Math.min(...data.map((d) => d.price)), hi = Math.max(...data.map((d) => d.price));
+    const pad = Math.max(0.5, (hi - lo) * 0.15), a = Math.max(0, lo - pad), b = hi + pad;
+    const x = (d) => L + (W - L - R) * ((new Date(d).getTime() - t0) / (t1 - t0));
+    const y = (v) => T + (H - T - B) * (1 - (v - a) / (b - a));
+    let g = "";
+    for (let k = 0; k <= 3; k++) { const v = a + (b - a) * k / 3; g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v.toFixed(2)}</text>`; }
+    g += `<text x="${L}" y="${H - 8}">${fmtD(data[0].date)}</text><text x="${W - R}" y="${H - 8}" text-anchor="end">${fmtD(data[data.length - 1].date)}</text>`;
+    const stores = STORES.filter((s) => data.some((d) => d.store === s));
+    stores.forEach((s) => {
+      const ds = data.filter((d) => d.store === s);
+      if (ds.length > 1) g += `<polyline fill="none" stroke="${CHART[s]}" stroke-width="2" points="${ds.map((d) => `${x(d.date)},${y(d.price)}`).join(" ")}"/>`;
+      ds.forEach((d) => g += `<circle cx="${x(d.date)}" cy="${y(d.price)}" r="5" fill="${CHART[s]}" stroke="var(--surface)" stroke-width="2"><title>${SN[s]} · ${fmtD(d.date)}: ${zl(d.price)} (${d.src})</title></circle>`);
+    });
+    el.innerHTML = `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Historia cen: ${esc(statProduct)}">${g}</svg></div>${legend(stores)}`;
+  }
+
+  // ---------- komunikaty ----------
+  let noteTimer;
+  function note(t, kind = "ok") { const el = $("#notice"); el.innerHTML = t ? `<div class="msg ${kind}" style="margin-bottom:12px">${esc(t)}</div>` : ""; clearTimeout(noteTimer); if (t) noteTimer = setTimeout(() => (el.innerHTML = ""), 7000); }
+
+  // ---------- start ----------
+  function rerender() {
+    const h = (location.hash || "#listy").slice(1);
+    if (h.startsWith("lista-")) renderItems();
+    else if (h === "promocje") renderPromos();
+    else if (h === "paragony") renderReceipts();
+    else if (h === "statystyki") renderStats();
+    else renderLists();
+  }
+  route();
+  (async () => {
+    if (!window.claude?.use) { note("Otwórz tę stronę w Claude, aby korzystać z bazy i AI.", "err"); return; }
+    const [d, u, s] = await Promise.all([claude.use("db"), claude.use("user"), claude.use("sample")]);
+    db = d; user = u; sample = s;
+    if (sample) { try { imgLimits = (await sample.limits()).images || null; } catch { imgLimits = null; } }
+    if (user) { try { myId = await user.id(); const c = await user.can("data.write"); if (c === false) canWrite = false; } catch {} }
+    if (!db) { note("Baza jest niedostępna — zaloguj się do Claude i otwórz artefakt ponownie.", "err"); route(); return; }
+    if (!canWrite) note("Masz dostęp tylko do podglądu. Poproś właściciela o uprawnienie „Contributor”.", "err");
+    const timer = setTimeout(() => note("Nie mogę połączyć się z bazą. Sprawdź połączenie.", "err"), 10000);
+    const ok = () => clearTimeout(timer);
+    const fail = (e) => { ok(); note(errText(e), "err"); };
+    subs.push(db.collection("lists").orderBy("createdAt", "desc").limit(60).onSnapshot((snap) => { if (!snap.metadata.fromCache) ok(); S.lists = snap.docs.map((x) => ({ id: x.id, ...x.data() })); rerender(); }, fail));
+    subs.push(db.collection("promos").limit(1000).onSnapshot((snap) => { S.promos = snap.docs.map((x) => ({ id: x.id, ...x.data() })); rerender(); }, fail));
+    subs.push(db.collection("receipts").orderBy("date", "desc").limit(400).onSnapshot((snap) => { S.receipts = snap.docs.map((x) => ({ id: x.id, ...x.data() })); rerender(); }, fail));
+    route();
+  })();
+})();
+</script>
