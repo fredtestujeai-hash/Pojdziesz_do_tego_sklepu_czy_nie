@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, RefreshCw, Search, Tags, Trash2, Ticket, ExternalLink } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { RefreshCw, Search, Tags, Trash2, Ticket, ExternalLink } from "lucide-react";
 import { STORE_META, STORES, supabase, todayStr, zl, type Promotion, type Store } from "../lib/supabase";
 import { runAi } from "../lib/api";
 import { uploadFile } from "../lib/upload";
-import { Empty, ErrorBox, PageHeader, Progress, StoreBadge } from "../components/ui";
+import { DropZone, Empty, ErrorBox, PageHeader, Progress, StoreBadge, usePasteImages } from "../components/ui";
 
 export default function Promotions() {
   const [promos, setPromos] = useState<Promotion[]>([]);
@@ -13,7 +13,6 @@ export default function Promotions() {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [couponStore, setCouponStore] = useState<Store | "">("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const t = todayStr();
@@ -33,21 +32,23 @@ export default function Promotions() {
     } catch (e: any) { setErr(e.message); } finally { setBusy(null); }
   }
 
-  async function onCoupons(files: FileList | null) {
-    if (!files?.length) return;
+  async function onImages(files: File[], kind: "kupon" | "gazetka") {
+    if (!files.length || busy) return;
     setErr(""); setMsg("");
     let total = 0;
     try {
       for (const [i, f] of [...files].entries()) {
-        setBusy(`Czytam kupon ${i + 1}/${files.length}…`);
+        setBusy(`Czytam ${kind === "kupon" ? "kupon" : "stronę gazetki"} ${i + 1}/${files.length}…`);
         const path = await uploadFile(f, "coupons");
-        const job = await runAi({ action: "parse_coupon", image_path: path, store: couponStore || undefined });
+        const job = await runAi({ action: "parse_coupon", image_path: path, store: couponStore || undefined, kind });
         total += job.result.added;
       }
-      setMsg(`Z kuponów dodano ${total} promocji.`);
+      setMsg(`${kind === "kupon" ? "Z kuponów" : "Z gazetki"} dodano ${total} promocji.`);
       load();
-    } catch (e: any) { setErr(e.message); } finally { setBusy(null); if (fileRef.current) fileRef.current.value = ""; }
+    } catch (e: any) { setErr(e.message); } finally { setBusy(null); }
   }
+
+  usePasteImages((f) => onImages(f, "kupon"), !busy);
 
   async function del(id: string) {
     setPromos((p) => p.filter((x) => x.id !== id));
@@ -63,17 +64,18 @@ export default function Promotions() {
   return (
     <>
       <PageHeader title="Promocje" subtitle={`${promos.length} aktywnych ofert z gazetek i kuponów`} />
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <button className="btn-primary" onClick={refresh} disabled={!!busy}><RefreshCw size={18} />Gazetki</button>
-        <button className="btn-ghost" onClick={() => fileRef.current?.click()} disabled={!!busy}><ImagePlus size={18} />Dodaj kupon</button>
+      <button className="btn-primary w-full mb-3" onClick={refresh} disabled={!!busy}><RefreshCw size={18} />Odśwież gazetki z internetu</button>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <DropZone title="Kupon" text="Przeciągnij zrzuty kuponów (Lidl Plus, Moja Biedronka, Aldi) albo kliknij" accept="image/*" disabled={!!busy} onFiles={(f) => onImages(f, "kupon")} />
+        <DropZone title="Gazetka" text="Przeciągnij zdjęcia lub zrzuty stron gazetki albo kliknij" accept="image/*" disabled={!!busy} onFiles={(f) => onImages(f, "gazetka")} />
       </div>
+      <p className="muted text-xs mb-3">Możesz też wkleić zrzut ekranu skrótem Ctrl+V — trafi jako kupon.</p>
       <div className="flex items-center gap-2 mb-4 text-xs">
-        <span className="muted">Sklep kuponu:</span>
+        <span className="muted">Sklep na zrzucie:</span>
         {(["", ...STORES] as const).map((s) => (
           <button key={s} onClick={() => setCouponStore(s)} className={`chip ${couponStore === s ? "bg-brand text-white" : "bg-black/[.04] dark:bg-white/[.06]"}`}>{s ? STORE_META[s].name : "auto"}</button>
         ))}
       </div>
-      <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onCoupons(e.target.files)} />
       {busy && <div className="mb-4"><Progress text={busy} /></div>}
       {err && <div className="mb-4"><ErrorBox text={err} /></div>}
       {msg && <div className="mb-4 rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 p-3 text-sm">{msg}</div>}

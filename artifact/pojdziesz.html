@@ -104,7 +104,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .chart { width: 100%; overflow-x: auto } .chart svg { display: block; width: 100%; height: auto }
 .chart text { fill: var(--muted); font: 11px var(--body) }
 .drop { border: 2px dashed var(--line); border-radius: var(--r); padding: 18px; text-align: center }
-.drop.over { border-color: var(--accent) }
+.drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent) }
+.drops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px }
+@media (max-width: 420px) { .drops { grid-template-columns: 1fr } }
+.drop { cursor: pointer; transition: background .15s, border-color .15s }
+.drop b { display: block; font-family: var(--display); font-size: 17px }
+.drop.disabled { opacity: .5; pointer-events: none }
 details summary { cursor: pointer; font-weight: 600 }
 .sec-title { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0 2px }
 .sec-title h2 { font-size: 20px }
@@ -380,15 +385,18 @@ Odpowiedz wyłącznie JSON-em w formacie:
         <div class="row small"><span class="muted">Sklep:</span>
           ${["", ...STORES].map((s) => `<button class="chip ${promoStore === s ? "on" : ""}" data-pstore="${s}">${s ? SN[s] : "rozpoznaj"}</button>`).join("")}
         </div>
-        <div class="drop" id="drop" ${imgs ? "" : "hidden"}>
-          <div style="font-weight:600">Zrzut ekranu kuponu lub strony gazetki</div>
-          <div class="muted small">Lidl Plus, Moja Biedronka, Aldi, zdjęcie gazetki · JPG/PNG · możesz wybrać kilka</div>
-          <div class="row" style="justify-content:center;margin-top:10px">
-            <button class="btn primary" id="pickCoupon" ${canWrite && sample ? "" : "disabled"}>Wybierz kupon</button>
-            <button class="btn" id="pickLeaflet" ${canWrite && sample ? "" : "disabled"}>Wybierz gazetkę</button>
+        <div class="drops" ${imgs ? "" : "hidden"}>
+          <div class="drop ${canWrite && sample ? "" : "disabled"}" id="dropCoupon" role="button" tabindex="0" data-kind="kupon">
+            <b>Kupon</b>
+            <div class="muted small">Przeciągnij tu zrzuty ekranu kuponów (Lidl Plus, Moja Biedronka, Aldi) albo kliknij, aby wybrać</div>
           </div>
-          <input type="file" id="couponFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
+          <div class="drop ${canWrite && sample ? "" : "disabled"}" id="dropLeaflet" role="button" tabindex="0" data-kind="gazetka">
+            <b>Gazetka</b>
+            <div class="muted small">Przeciągnij tu zdjęcia lub zrzuty stron gazetki albo kliknij, aby wybrać</div>
+          </div>
         </div>
+        <div class="muted small" ${imgs ? "" : "hidden"}>Możesz też wkleić zrzut ekranu skrótem Ctrl+V — trafi jako kupon. JPG, PNG lub WebP, kilka naraz.</div>
+        <input type="file" id="couponFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
         <details>
           <summary>Wklej tekst promocji z gazetki</summary>
           <div class="stack" style="margin-top:8px">
@@ -418,13 +426,14 @@ Odpowiedz wyłącznie JSON-em w formacie:
       <div id="promoBox" class="stack"></div>`;
     let leaflet = false;
     document.querySelectorAll("[data-pstore]").forEach((b) => b.onclick = () => { promoStore = b.dataset.pstore; document.querySelectorAll("[data-pstore]").forEach((x) => x.classList.toggle("on", x === b)); });
-    $("#pickCoupon").onclick = () => { leaflet = false; $("#couponFile").click(); };
-    $("#pickLeaflet").onclick = () => { leaflet = true; $("#couponFile").click(); };
     $("#couponFile").onchange = (e) => { readPromoImages([...e.target.files], leaflet ? "gazetka" : "kupon"); e.target.value = ""; };
-    const drop = $("#drop");
-    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
-    drop.ondragleave = () => drop.classList.remove("over");
-    drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); readPromoImages([...e.dataTransfer.files].filter((f) => f.type.startsWith("image/")), "kupon"); };
+    document.querySelectorAll(".drops .drop").forEach((d) => {
+      const kind = d.dataset.kind;
+      const pick = () => { leaflet = kind === "gazetka"; $("#couponFile").click(); };
+      d.onclick = pick;
+      d.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } };
+      bindDrop(d, (files) => readPromoImages(files, kind));
+    });
     $("#pasteBtn").onclick = () => { const t = $("#pasteText").value.trim(); if (t) readPromoText(t); };
     $("#manual").onsubmit = async (e) => {
       e.preventDefault();
@@ -518,13 +527,19 @@ Odpowiedz wyłącznie JSON-em: ${PROMO_FORMAT}`;
     $("#view").innerHTML = `
       <div class="sec-title"><h2>Paragony</h2><span class="muted small" id="recCount"></span></div>
       <div class="card stack" style="margin-bottom:12px">
-        <button class="btn primary big" id="pickRec" ${canWrite && sample && imgLimits ? "" : "disabled"}>Dodaj zdjęcie paragonu</button>
+        <div class="drop ${canWrite && sample && imgLimits ? "" : "disabled"}" id="dropRec" role="button" tabindex="0">
+          <b>Dodaj paragon</b>
+          <div class="muted small">Przeciągnij tu zdjęcia paragonów, wklej Ctrl+V albo kliknij, aby wybrać</div>
+        </div>
         <input type="file" id="recFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
         <div class="muted small" style="text-align:center">${imgLimits ? "Claude odczyta sklep, datę, pozycje i rabaty. Zdjęcie nie jest zapisywane — tylko odczytane dane." : "W tym widoku nie można wysyłać zdjęć do Claude."}</div>
         <div id="recStatus"></div>
       </div>
       <div id="recBox" class="stack"></div>`;
-    $("#pickRec").onclick = () => $("#recFile").click();
+    const dr = $("#dropRec");
+    dr.onclick = () => $("#recFile").click();
+    dr.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#recFile").click(); } };
+    bindDrop(dr, (files) => readReceipts(files));
     $("#recFile").onchange = (e) => { readReceipts([...e.target.files]); e.target.value = ""; };
     renderRecStatus(); renderReceipts();
   }
@@ -690,6 +705,39 @@ Odpowiedz wyłącznie JSON-em:
     });
     el.innerHTML = `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Historia cen: ${esc(statProduct)}">${g}</svg></div>${legend(stores)}`;
   }
+
+  // ---------- przeciąganie i wklejanie plików ----------
+  const IMG_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  function imagesFrom(list) {
+    const files = [...(list || [])].filter((f) => f && IMG_TYPES.includes(f.type));
+    const skipped = [...(list || [])].length - files.length;
+    if (skipped) note(`Pominięto ${skipped} plik(i) — obsługiwane są zdjęcia JPG, PNG i WebP.`, "err");
+    return files;
+  }
+  function bindDrop(el, onFiles) {
+    let depth = 0;
+    el.addEventListener("dragenter", (e) => { e.preventDefault(); depth++; el.classList.add("over"); });
+    el.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+    el.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; el.classList.remove("over"); } });
+    el.addEventListener("drop", (e) => {
+      e.preventDefault(); e.stopPropagation(); depth = 0; el.classList.remove("over");
+      if (el.classList.contains("disabled")) return;
+      const files = imagesFrom(e.dataTransfer.files);
+      if (files.length) onFiles(files);
+    });
+  }
+  // plik upuszczony obok pola nie otwiera się w przeglądarce
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("drop", (e) => e.preventDefault());
+  // Ctrl+V ze zrzutem ekranu: w Promocjach jako kupon, w Paragonach jako paragon
+  document.addEventListener("paste", (e) => {
+    const t = e.target; if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) return;
+    const files = imagesFrom([...(e.clipboardData?.items || [])].filter((i) => i.kind === "file").map((i) => i.getAsFile()));
+    if (!files.length || !canWrite || !sample || !imgLimits) return;
+    const h = (location.hash || "#listy").slice(1);
+    if (h === "promocje") { e.preventDefault(); readPromoImages(files, "kupon"); }
+    else if (h === "paragony") { e.preventDefault(); readReceipts(files); }
+  });
 
   // ---------- komunikaty ----------
   let noteTimer;

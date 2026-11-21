@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { STORE_META, type Store } from "../lib/supabase";
@@ -55,4 +56,57 @@ export function Progress({ text }: { text: string }) {
 
 export function ErrorBox({ text }: { text: string }) {
   return <div className="rounded-2xl bg-red-500/10 text-red-600 dark:text-red-400 p-3 text-sm">{text}</div>;
+}
+
+const IMG_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+/** Pole do przeciągania plików (i kliknięcia, aby wybrać). */
+export function DropZone({ title, text, accept, onFiles, disabled, pdf = false }: {
+  title: string; text: string; accept: string; onFiles: (files: File[]) => void; disabled?: boolean; pdf?: boolean;
+}) {
+  const [over, setOver] = useState(false);
+  const depth = useRef(0);
+  const input = useRef<HTMLInputElement>(null);
+  const ok = (f: File) => IMG_TYPES.includes(f.type) || (pdf && f.type === "application/pdf");
+  const take = (list: FileList | null) => {
+    const files = [...(list ?? [])].filter(ok);
+    if (files.length) onFiles(files);
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-disabled={disabled}
+      onClick={() => !disabled && input.current?.click()}
+      onKeyDown={(e) => { if (!disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); input.current?.click(); } }}
+      onDragEnter={(e) => { e.preventDefault(); depth.current++; setOver(true); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+      onDragLeave={() => { if (--depth.current <= 0) { depth.current = 0; setOver(false); } }}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); depth.current = 0; setOver(false); if (!disabled) take(e.dataTransfer.files); }}
+      className={`rounded-3xl border-2 border-dashed p-4 text-center cursor-pointer transition select-none ${
+        over ? "border-brand bg-brand/10" : "border-black/10 dark:border-white/15 hover:border-brand/50"
+      } ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+    >
+      <p className="font-bold">{title}</p>
+      <p className="muted text-xs mt-1">{text}</p>
+      <input ref={input} type="file" accept={accept} multiple hidden onChange={(e) => { take(e.target.files); e.target.value = ""; }} />
+    </div>
+  );
+}
+
+/** Ctrl+V ze zrzutem ekranu (poza polami tekstowymi). */
+export function usePasteImages(onFiles: (files: File[]) => void, enabled: boolean) {
+  const cb = useRef(onFiles);
+  cb.current = onFiles;
+  useEffect(() => {
+    if (!enabled) return;
+    const h = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      const files = [...(e.clipboardData?.items ?? [])].filter((i) => i.kind === "file").map((i) => i.getAsFile()).filter((f): f is File => !!f && IMG_TYPES.includes(f.type));
+      if (files.length) { e.preventDefault(); cb.current(files); }
+    };
+    document.addEventListener("paste", h);
+    return () => document.removeEventListener("paste", h);
+  }, [enabled]);
 }

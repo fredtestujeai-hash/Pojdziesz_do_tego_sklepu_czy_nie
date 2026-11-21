@@ -266,17 +266,19 @@ async function loadFile(path: string) {
 }
 
 // ---------- 4. Kupon ----------
-async function parseCoupon(userId: string, imagePath: string, storeHint?: Store) {
+async function parseCoupon(userId: string, imagePath: string, storeHint?: Store, kind: "kupon" | "gazetka" = "kupon") {
   const block = await loadFile(imagePath);
   const res = await structured<{ promotions: Promo[] }>({
     system:
-      `Odczytujesz kupony i promocje ze zrzutów ekranu aplikacji sklepowych (Lidl Plus, Moja Biedronka, Aldi) lub zdjęć kuponów. Dziś: ${today()}. ` +
+      (kind === "gazetka"
+        ? `Odczytujesz promocje ze zdjęć lub zrzutów ekranu stron gazetek promocyjnych sieci Lidl, Biedronka lub Aldi. Dziś: ${today()}. `
+        : `Odczytujesz kupony i promocje ze zrzutów ekranu aplikacji sklepowych (Lidl Plus, Moja Biedronka, Aldi) lub zdjęć kuponów. Dziś: ${today()}. `) +
       "Daty YYYY-MM-DD. Jeśli kupon daje rabat procentowy bez ceny, oblicz cenę po rabacie tylko gdy cena regularna jest widoczna; w przeciwnym razie pomiń. " +
       (storeHint ? `Sklep wskazany przez użytkownika: ${storeHint}.` : "Rozpoznaj sklep po wyglądzie aplikacji/kuponu."),
     content: [block, { type: "text", text: "Wypisz wszystkie promocje/kupony widoczne na obrazie." }],
     schema: promoSchema,
   });
-  const added = await insertPromos(res.promotions, "kupon", userId, imagePath);
+  const added = await insertPromos(res.promotions, kind, userId, imagePath);
   return { found: res.promotions.length, added, promotions: res.promotions };
 }
 
@@ -406,7 +408,8 @@ Deno.serve(async (req) => {
       case "optimize_list":
         return runJob("optimize_list", body, userId, (id) => optimizeList(id, userId, body.list_id, body.refresh !== false));
       case "parse_coupon":
-        return runJob("parse_coupon", body, userId, () => parseCoupon(userId, body.image_path, body.store));
+        return runJob("parse_coupon", body, userId, () =>
+          parseCoupon(userId, body.image_path, body.store, body.kind === "gazetka" ? "gazetka" : "kupon"));
       case "parse_receipt":
         return runJob("parse_receipt", body, userId, () => parseReceipt(body.receipt_id));
       default:

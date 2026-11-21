@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { Camera, ChevronDown, FileText, Receipt as ReceiptIcon, RotateCw, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, FileText, Receipt as ReceiptIcon, RotateCw, Trash2 } from "lucide-react";
 import { supabase, zl, type Store } from "../lib/supabase";
 import { runAi } from "../lib/api";
 import { uploadFile } from "../lib/upload";
-import { Empty, ErrorBox, PageHeader, Progress, Spinner, StoreBadge } from "../components/ui";
+import { DropZone, Empty, ErrorBox, PageHeader, Progress, Spinner, StoreBadge, usePasteImages } from "../components/ui";
 
 type R = { id: string; store: Store | null; purchase_date: string | null; total: number | null; total_discount: number | null; status: string; error: string | null; created_at: string; image_path: string };
 type RI = { id: string; raw_name: string; product_name: string; category: string; quantity: number; unit_price: number | null; total_price: number; discount: number; overpaid?: number; best_known_price?: number };
@@ -14,7 +14,6 @@ export default function Receipts() {
   const [items, setItems] = useState<Record<string, RI[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const { data } = await supabase.from("receipts").select("*").order("purchase_date", { ascending: false, nullsFirst: true }).order("created_at", { ascending: false }).limit(100);
@@ -31,8 +30,8 @@ export default function Receipts() {
     await runAi({ action: "parse_receipt", receipt_id: receiptId });
   }
 
-  async function onFiles(files: FileList | null) {
-    if (!files?.length) return;
+  async function onFiles(files: File[]) {
+    if (!files.length || busy) return;
     setErr("");
     try {
       for (const [i, f] of [...files].entries()) {
@@ -43,8 +42,10 @@ export default function Receipts() {
         load();
         await process(data.id);
       }
-    } catch (e: any) { setErr(e.message); } finally { setBusy(null); load(); if (fileRef.current) fileRef.current.value = ""; }
+    } catch (e: any) { setErr(e.message); } finally { setBusy(null); load(); }
   }
+
+  usePasteImages(onFiles, !busy);
 
   async function toggle(id: string) {
     if (open === id) return setOpen(null);
@@ -68,8 +69,9 @@ export default function Receipts() {
   return (
     <>
       <PageHeader title="Paragony" subtitle="Zdjęcie lub PDF — AI odczyta pozycje i ceny" />
-      <button className="btn-primary w-full !py-4 mb-4 text-base" onClick={() => fileRef.current?.click()} disabled={!!busy}><Camera size={20} />Dodaj paragon</button>
-      <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+      <div className="mb-4">
+        <DropZone title="Dodaj paragon" text="Przeciągnij tu zdjęcia lub PDF-y paragonów, wklej Ctrl+V albo kliknij, aby wybrać (na telefonie: aparat lub galeria)" accept="image/*,application/pdf" pdf disabled={!!busy} onFiles={onFiles} />
+      </div>
       {busy && <div className="mb-4"><Progress text={busy} /></div>}
       {err && <div className="mb-4"><ErrorBox text={err} /></div>}
       {rows.length === 0 && !busy && <Empty icon={<ReceiptIcon />} title="Brak paragonów" text="Dodaj zdjęcie paragonu, żeby śledzić wydatki i ceny." />}
