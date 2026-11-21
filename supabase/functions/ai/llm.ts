@@ -88,9 +88,13 @@ function extractJson(text: string): unknown {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-async function metaStructured<T>(o: { system: string; content: Content; schema: Record<string, unknown> }): Promise<T> {
+type Effort = "low" | "medium" | "high";
+
+async function metaStructured<T>(o: { system: string; content: Content; schema: Record<string, unknown>; effort?: Effort }): Promise<T> {
+  const reasoning = { effort: o.effort ?? "low" };
   try {
     const res = await metaCall({
+      reasoning,
       instructions: o.system,
       input: metaInput(o.content),
       text: { format: { type: "json_schema", name: "wynik", schema: o.schema, strict: true } },
@@ -100,6 +104,7 @@ async function metaStructured<T>(o: { system: string; content: Content; schema: 
     // Jeśli API nie przyjmie schematu (400) albo zwróci nie-JSON — prosimy o JSON w treści.
     if ((e as { status?: number }).status && (e as { status?: number }).status !== 400) throw e;
     const res = await metaCall({
+      reasoning,
       instructions:
         o.system + "\n\nOdpowiedz WYŁĄCZNIE poprawnym JSON-em zgodnym z tym schematem JSON Schema (bez komentarzy):\n" + JSON.stringify(o.schema),
       input: metaInput(o.content),
@@ -110,6 +115,7 @@ async function metaStructured<T>(o: { system: string; content: Content; schema: 
 
 async function metaResearch(o: { system: string; prompt: string }): Promise<string> {
   const res = await metaCall({
+    reasoning: { effort: "low" },
     instructions: o.system,
     input: metaInput(o.prompt),
     tools: [{ type: "web_search" }],
@@ -144,7 +150,7 @@ export async function structured<T>(o: {
   system: string;
   content: Content;
   schema: Record<string, unknown>;
-  effort?: "low" | "medium" | "high";
+  effort?: Effort;
 }): Promise<T> {
   if (PROVIDER !== "anthropic") return metaStructured<T>(o);
   const c = await anthropic();
