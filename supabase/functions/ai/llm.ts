@@ -116,6 +116,7 @@ async function metaStructured<T>(o: { system: string; content: Content; schema: 
 async function metaResearch(o: { system: string; prompt: string }): Promise<string> {
   const res = await metaCall({
     reasoning: { effort: "low" },
+    max_tool_calls: 8, // limit wyszukiwań na sklep — bez niego Muse robi ich ~20 (ok. 200 tys. tokenów)
     instructions: o.system,
     input: metaInput(o.prompt),
     tools: [{ type: "web_search" }],
