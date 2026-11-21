@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.119.2";
+import { createClient } from "npm:@supabase/supabase-js@2.119.2";
 import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 import { configError, imageBlock, research, structured } from "./llm.ts";
 
@@ -142,6 +142,26 @@ async function refreshPromotions(jobId: string, userId: string, stores: Store[],
 }
 
 // ---------- 2. Optymalizacja listy ----------
+// ---------- dopasowanie nazw (bez AI) ----------
+const STOP = new Set(["szt", "sztuk", "opak", "duze", "male", "maly", "duzy", "dla", "bez", "lub", "albo", "the", "pol", "kg", "ml"]);
+function stems(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/ł/g, "l")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z0-9%]+/)
+    .filter((w) => w.length > 2 && !STOP.has(w) && !/^\d+$/.test(w))
+    .map((w) => w.slice(0, 5)); // prosty „rdzeń”: masło/masła/maslo → masl…
+}
+function matchScore(want: string[], have: string[]): number {
+  let s = 0;
+  for (const w of new Set(want)) {
+    if (have.some((h) => h === w || (w.length >= 4 && (h.startsWith(w.slice(0, 4)) || w.startsWith(h.slice(0, 4)))))) s++;
+  }
+  return s;
+}
+
 type Assignment = {
   item_id: string;
   store: Store;
@@ -166,23 +186,58 @@ async function optimizeList(jobId: string, userId: string, listId: string, refre
 
   await setProgress(jobId, "Dobieram najlepsze oferty…");
   const t = today();
-  const { data: promos } = await admin
+  const { data: allPromos } = await admin
     .from("promotions")
     .select("id, store, product_name, brand, price, regular_price, unit, conditions, valid_from, valid_to, source")
     .or(`valid_to.gte.${t},valid_to.is.null`)
     .order("created_at", { ascending: false })
-    .limit(600);
+    .limit(3000);
 
-  const promoLines = (promos ?? [])
+  // Wstępny filtr w kodzie (za darmo): do AI trafiają tylko promocje podobne do pozycji z listy,
+  // maks. 6 na pozycję. Pozycje bez kandydatów od razu idą do Lidla — bez wywołania AI.
+  const candidates = new Map<string, NonNullable<typeof allPromos>>();
+  for (const i of items) {
+    const want = stems(`${i.name} ${i.note ?? ""}`);
+    const scored = (allPromos ?? [])
+      .map((p) => ({ p, s: matchScore(want, stems(`${p.product_name} ${p.brand ?? ""}`)) }))
+      .filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s || a.p.price - b.p.price)
+      .slice(0, 6)
+      .map((x) => x.p);
+    candidates.set(i.id, scored);
+  }
+  const withCands = items.filter((i) => (candidates.get(i.id) ?? []).length > 0);
+  const promos = [...new Map(withCands.flatMap((i) => candidates.get(i.id)!).map((p) => [p.id, p])).values()];
+
+  const promoLines = promos
     .map(
       (p) =>
-        `${p.id} | ${p.store} | ${p.product_name}${p.brand ? ` (${p.brand})` : ""} | ${p.price} zł${p.unit ? `/${p.unit}` : ""}` +
-        `${p.regular_price ? ` (reg. ${p.regular_price})` : ""} | ${p.conditions ?? "-"} | ${p.valid_from ?? "?"}→${p.valid_to ?? "?"} | ${p.source}`,
+        `${p.id} | ${p.store} | ${p.product_name}${p.brand ? ` (${p.brand})` : ""} | ${p.price}${p.unit ? `/${p.unit}` : ""}` +
+        `${p.regular_price ? ` reg ${p.regular_price}` : ""}${p.conditions ? ` | ${p.conditions}` : ""}${p.source === "kupon" ? " | kupon" : ""}`,
     )
     .join("\n");
-  const itemLines = items
-    .map((i) => `${i.id} | ${i.name} | ${i.quantity} ${i.unit ?? ""}${i.note ? ` | uwaga: ${i.note}` : ""}`)
+  const itemLines = withCands
+    .map((i) => `${i.id} | ${i.name} | ${i.quantity}${i.note ? ` | ${i.note}` : ""}`)
     .join("\n");
+
+  // nic do porównania — koszt zero
+  if (!withCands.length) {
+    for (const i of items) {
+      await admin.from("list_items").update({
+        assigned_store: "lidl", promo_id: null, best_price: null, regular_price: null,
+        promo_label: "brak promocji – kup w Lidlu", ai_note: null, alternatives: [],
+      }).eq("id", i.id);
+    }
+    const summary = {
+      per_store: { lidl: { items: items.length, total: 0, savings: 0 } },
+      verdict: (allPromos ?? []).length
+        ? "Żadna zapisana promocja nie pasuje do tej listy — wszystko kup w Lidlu."
+        : "Brak zapisanych promocji. Dodaj zrzuty lub tekst gazetek w zakładce Promocje, a potem sprawdź listę ponownie.",
+      refresh: refreshResult, ai: false, at: new Date().toISOString(),
+    };
+    await admin.from("shopping_lists").update({ status: "optimized", optimized_at: new Date().toISOString(), summary }).eq("id", listId);
+    return summary;
+  }
 
   const schema = obj({
     assignments: {
@@ -214,13 +269,22 @@ async function optimizeList(jobId: string, userId: string, listId: string, refre
       "5. promo_id musi być dokładnie identyfikatorem z listy promocji albo null. Warunki promocji (np. aplikacja, wielosztuki) opisz w note.\n" +
       "6. alternatives: do 2 innych ofert dla tej pozycji (mogą być puste).",
     content:
-      `Dziś: ${t}.\n\nLISTA ZAKUPÓW (id | nazwa | ilość | uwagi):\n${itemLines}\n\n` +
-      `AKTYWNE PROMOCJE (id | sklep | produkt | cena | warunki | ważność | źródło):\n${promoLines || "(brak danych)"}`,
+      `Dziś: ${t}.\n\nLISTA (id | nazwa | ilość | uwagi):\n${itemLines}\n\n` +
+      `PROMOCJE (id | sklep | produkt | cena zł/jedn. | warunki):\n${promoLines}`,
     schema,
-    effort: "medium",
+    effort: "low",
   });
 
-  const promoIds = new Set((promos ?? []).map((p) => p.id));
+  // pozycje bez żadnej pasującej promocji — Lidl, bez AI
+  const noCand = items.filter((i) => !withCands.includes(i));
+  for (const i of noCand) {
+    res.assignments.push({
+      item_id: i.id, store: "lidl", promo_id: null, price: null, regular_price: null,
+      label: "brak promocji – kup w Lidlu", note: null, alternatives: [],
+    });
+  }
+
+  const promoIds = new Set(promos.map((p) => p.id));
   const itemIds = new Set(items.map((i) => i.id));
   for (const a of res.assignments) {
     if (!itemIds.has(a.item_id)) continue;
@@ -282,7 +346,24 @@ async function parseCoupon(userId: string, imagePath: string, storeHint?: Store,
   return { found: res.promotions.length, added, promotions: res.promotions };
 }
 
-// ---------- 5. Paragon ----------
+// ---------- 5. Tekst gazetki (wklejony) ----------
+async function parsePromoText(userId: string, text: string, storeHint?: Store) {
+  const clean = text.trim().slice(0, 40000);
+  if (clean.length < 10) throw new Error("Wklej tekst gazetki (co najmniej kilka słów z cenami).");
+  const res = await structured<{ promotions: Promo[] }>({
+    system:
+      `Wyciągasz promocje z tekstu gazetki sieci Lidl, Biedronka lub Aldi (wklejonego ze strony lub aplikacji). Dziś: ${today()}. ` +
+      "Daty YYYY-MM-DD (rok bieżący, jeśli nie podano). Cena = cena promocyjna za podaną jednostkę; przy wielosztukach cena za sztukę w promocji, warunek opisz. " +
+      "Pomiń pozycje bez konkretnej ceny. source_url = null. " +
+      (storeHint ? `Sklep wskazany przez użytkownika: ${storeHint}.` : "Rozpoznaj sklep z treści."),
+    content: clean,
+    schema: promoSchema,
+  });
+  const added = await insertPromos(res.promotions, "gazetka", userId);
+  return { found: res.promotions.length, added };
+}
+
+// ---------- 6. Paragon ----------
 async function parseReceipt(receiptId: string) {
   const { data: receipt, error } = await admin.from("receipts").select("*").eq("id", receiptId).single();
   if (error || !receipt) throw new Error("Brak paragonu");
@@ -406,7 +487,10 @@ Deno.serve(async (req) => {
         return runJob("refresh_promotions", body, userId, (id) => refreshPromotions(id, userId, stores, body.items ?? []));
       }
       case "optimize_list":
-        return runJob("optimize_list", body, userId, (id) => optimizeList(id, userId, body.list_id, body.refresh !== false));
+        // wyszukiwanie w internecie tylko na wyraźne żądanie (refresh: true) — domyślnie same zapisane promocje
+        return runJob("optimize_list", body, userId, (id) => optimizeList(id, userId, body.list_id, body.refresh === true));
+      case "parse_promo_text":
+        return runJob("parse_promo_text", body, userId, () => parsePromoText(userId, String(body.text ?? ""), body.store));
       case "parse_coupon":
         return runJob("parse_coupon", body, userId, () =>
           parseCoupon(userId, body.image_path, body.store, body.kind === "gazetka" ? "gazetka" : "kupon"));

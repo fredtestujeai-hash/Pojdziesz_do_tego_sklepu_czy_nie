@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Search, Tags, Trash2, Ticket, ExternalLink } from "lucide-react";
+import { ClipboardPaste, Search, Tags, Trash2, Ticket, ExternalLink } from "lucide-react";
 import { STORE_META, STORES, supabase, todayStr, zl, type Promotion, type Store } from "../lib/supabase";
 import { runAi } from "../lib/api";
 import { uploadFile } from "../lib/upload";
@@ -21,13 +21,15 @@ export default function Promotions() {
   }
   useEffect(() => { load(); }, []);
 
-  async function refresh() {
-    setErr(""); setMsg(""); setBusy("Przeglądam gazetki…");
+  const [pasteText, setPasteText] = useState("");
+  const [showPaste, setShowPaste] = useState(false);
+  async function readText() {
+    if (pasteText.trim().length < 10 || busy) return;
+    setErr(""); setMsg(""); setBusy("Odczytuję promocje z tekstu…");
     try {
-      const job = await runAi({ action: "refresh_promotions" }, setBusy);
-      const added = (job.result as any[]).reduce((a, r) => a + (r.added ?? 0), 0);
-      const errs = (job.result as any[]).filter((r) => r.error);
-      setMsg(`Dodano ${added} nowych promocji.` + (errs.length ? ` Problem: ${errs.map((e) => STORE_META[e.store as Store].name).join(", ")}.` : ""));
+      const job = await runAi({ action: "parse_promo_text", text: pasteText, store: couponStore || undefined });
+      setMsg(`Z tekstu gazetki dodano ${job.result.added} promocji (znaleziono ${job.result.found}).`);
+      setPasteText(""); setShowPaste(false);
       load();
     } catch (e: any) { setErr(e.message); } finally { setBusy(null); }
   }
@@ -64,12 +66,23 @@ export default function Promotions() {
   return (
     <>
       <PageHeader title="Promocje" subtitle={`${promos.length} aktywnych ofert z gazetek i kuponów`} />
-      <button className="btn-primary w-full mb-3" onClick={refresh} disabled={!!busy}><RefreshCw size={18} />Odśwież gazetki z internetu</button>
       <div className="grid grid-cols-2 gap-2 mb-2">
         <DropZone title="Kupon" text="Przeciągnij zrzuty kuponów (Lidl Plus, Moja Biedronka, Aldi) albo kliknij" accept="image/*" disabled={!!busy} onFiles={(f) => onImages(f, "kupon")} />
         <DropZone title="Gazetka" text="Przeciągnij zdjęcia lub zrzuty stron gazetki albo kliknij" accept="image/*" disabled={!!busy} onFiles={(f) => onImages(f, "gazetka")} />
       </div>
-      <p className="muted text-xs mb-3">Możesz też wkleić zrzut ekranu skrótem Ctrl+V — trafi jako kupon.</p>
+      <p className="muted text-xs mb-2">Możesz też wkleić zrzut ekranu skrótem Ctrl+V — trafi jako kupon.</p>
+      <div className="card p-3 mb-3">
+        <button className="w-full flex items-center gap-2 font-semibold text-sm" onClick={() => setShowPaste(!showPaste)} aria-expanded={showPaste}>
+          <ClipboardPaste size={16} />Wklej tekst gazetki
+          <span className="muted font-normal ml-auto">{showPaste ? "zwiń" : "rozwiń"}</span>
+        </button>
+        {showPaste && (
+          <div className="mt-3 space-y-2">
+            <textarea id="pasteText" className="input min-h-32" placeholder="Zaznacz i skopiuj tekst ze strony z gazetką (np. lidl.pl, biedronka.pl, blix.pl), wklej tutaj. Np. „Masło Pilos 200 g 2,99 zł zamiast 6,99 zł, 20–22.11”" value={pasteText} onChange={(e) => setPasteText(e.target.value)} />
+            <button className="btn-primary w-full" onClick={readText} disabled={!!busy || pasteText.trim().length < 10}>Odczytaj promocje z tekstu</button>
+          </div>
+        )}
+      </div>
       <div className="flex items-center gap-2 mb-4 text-xs">
         <span className="muted">Sklep na zrzucie:</span>
         {(["", ...STORES] as const).map((s) => (
@@ -92,7 +105,7 @@ export default function Promotions() {
         ))}
       </div>
 
-      {shown.length === 0 && !busy && <Empty icon={<Tags />} title="Brak promocji" text="Kliknij „Gazetki”, żeby AI przejrzało aktualne gazetki, albo dodaj zrzut ekranu kuponu." />}
+      {shown.length === 0 && !busy && <Empty icon={<Tags />} title="Brak promocji" text="Przeciągnij zrzuty stron gazetki lub kuponów do pól powyżej albo wklej tekst gazetki. Potem sprawdź listę zakupów." />}
       <div className="grid gap-2">
         {shown.map((p) => {
           const pct = p.regular_price && p.regular_price > p.price ? Math.round((1 - p.price / p.regular_price) * 100) : null;

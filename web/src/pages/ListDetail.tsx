@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Minus, Plus, Sparkles, Trash2, Wand2, Zap } from "lucide-react";
+import { ArrowLeft, Check, Minus, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { STORE_META, STORES, supabase, zl, type ListItem, type ShoppingList, type Store } from "../lib/supabase";
 import { runAi } from "../lib/api";
 import { ErrorBox, Progress, StoreBadge } from "../components/ui";
@@ -61,10 +61,10 @@ export default function ListDetail() {
     await patch(itemId, { assigned_store: store, ...(alt ? { best_price: alt.price, promo_label: alt.label } : { best_price: null, promo_label: "przeniesione ręcznie" }) });
   }
 
-  async function optimize(refresh: boolean) {
-    setErr(""); setBusy(refresh ? "Przeglądam gazetki…" : "Dobieram oferty…");
+  async function optimize() {
+    setErr(""); setBusy("Dobieram oferty…");
     try {
-      await runAi({ action: "optimize_list", list_id: id, refresh }, setBusy);
+      await runAi({ action: "optimize_list", list_id: id }, setBusy);
       await load();
       setView("shop");
     } catch (e: any) { setErr(e.message); } finally { setBusy(null); }
@@ -135,9 +135,11 @@ export default function ListDetail() {
           </div>
           {busy ? <Progress text={busy} /> : items.length > 0 && (
             <div className="space-y-2">
-              <button className="btn-primary w-full !py-4 text-base" onClick={() => optimize(true)}><Wand2 size={20} />Znajdź najlepsze oferty</button>
-              <button className="btn-ghost w-full text-sm" onClick={() => optimize(false)}><Zap size={16} />Szybko — tylko z zapisanych promocji</button>
-              <p className="muted text-xs text-center">Pełne wyszukiwanie przegląda aktualne gazetki Lidla, Biedronki i Aldi (ok. 1–3 min).</p>
+              <button className="btn-primary w-full !py-4 text-base" onClick={optimize}><Wand2 size={20} />Znajdź najlepsze oferty</button>
+              <p className="muted text-xs text-center">
+                Porównuje listę z promocjami z gazetek i kuponów dodanych w zakładce <Link to="/promocje" className="underline">Promocje</Link>.
+                Pozycje bez promocji trafiają do Lidla. Koszt: kilka–kilkanaście groszy.
+              </p>
             </div>
           )}
           {err && <div className="mt-3"><ErrorBox text={err} /></div>}
